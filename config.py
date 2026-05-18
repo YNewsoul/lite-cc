@@ -1,5 +1,4 @@
 """Configuration management for litecc (multi-provider)."""
-import os
 import json
 from pathlib import Path
 
@@ -9,9 +8,23 @@ HISTORY_FILE      = CONFIG_DIR  / "input_history.txt"
 SESSIONS_DIR      = CONFIG_DIR  / "sessions"
 DAILY_DIR         = SESSIONS_DIR / "daily"       # daily/YYYY-MM-DD/session_*.json
 SESSION_HIST_FILE = SESSIONS_DIR / "history.json" # master: all sessions ever
+PROJECT_SECRETS_NAME = "secrets.json"
 
 # 为兼容旧版本而保留（/resume 仍会从这里读取）
 MR_SESSION_DIR = SESSIONS_DIR / "mr_sessions"
+
+SECRET_CONFIG_KEYS = {
+    "api_key",
+    "anthropic_api_key",
+    "openai_api_key",
+    "gemini_api_key",
+    "kimi_api_key",
+    "qwen_api_key",
+    "zhipu_api_key",
+    "deepseek_api_key",
+    "minimax_api_key",
+    "custom_api_key",
+}
 
 DEFAULTS = {
     "model":            "zhipu/glm-4",
@@ -27,15 +40,51 @@ DEFAULTS = {
     "max_concurrent_agents": 3,
     "session_daily_limit":   10,    # max sessions kept per day in daily/
     "session_history_limit": 200,  # max sessions kept in history.json
-    # 按提供商划分的 API Key（可选；环境变量优先）
-    "anthropic_api_key": "sk-ant-...",
-    "openai_api_key":    "..",
-    "gemini_api_key":    "...",
-    "kimi_api_key":      "...",
-    "qwen_api_key":      "...",
-    "zhipu_api_key":     "a1047eca23af45e4ac65ae7cdefbdf00.oEViOZgqksk2OvuC",
-    "deepseek_api_key":  "..."
+    # API keys are injected from environment variables or project-local secrets.
+    "anthropic_api_key": "",
+    "openai_api_key":    "",
+    "gemini_api_key":    "",
+    "kimi_api_key":      "",
+    "qwen_api_key":      "",
+    "zhipu_api_key":     "",
+    "deepseek_api_key":  "",
+    "minimax_api_key":   "",
+    "custom_api_key":    "",
 }
+
+
+def _load_json_file(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _find_project_secrets_file(start_dir: Path | None = None) -> Path | None:
+    current = (start_dir or Path.cwd()).resolve()
+    while True:
+        candidate = current / ".litecc" / PROJECT_SECRETS_NAME
+        if candidate.exists():
+            return candidate
+        parent = current.parent
+        if parent == current:
+            return None
+        current = parent
+
+
+def _load_project_secrets() -> tuple[dict, Path | None]:
+    secrets_path = _find_project_secrets_file()
+    if secrets_path is None:
+        return {}, None
+
+    raw = _load_json_file(secrets_path)
+    if not isinstance(raw, dict):
+        return {}, secrets_path
+
+    secrets = {k: v for k, v in raw.items() if k in SECRET_CONFIG_KEYS and isinstance(v, str)}
+    if secrets.get("api_key") and not secrets.get("anthropic_api_key"):
+        secrets["anthropic_api_key"] = secrets["api_key"]
+    return secrets, secrets_path
 
 
 def load_config() -> dict:
@@ -43,10 +92,7 @@ def load_config() -> dict:
     SESSIONS_DIR.mkdir(exist_ok=True)
     cfg = dict(DEFAULTS)
     if CONFIG_FILE.exists():
-        try:
-            cfg.update(json.loads(CONFIG_FILE.read_text()))
-        except Exception:
-            pass
+        cfg.update(_load_json_file(CONFIG_FILE))
     # 向后兼容：旧版单一 api_key 映射到 anthropic_api_key
     if cfg.get("api_key") and not cfg.get("anthropic_api_key"):
         cfg["anthropic_api_key"] = cfg.pop("api_key")
@@ -54,9 +100,11 @@ def load_config() -> dict:
     # 计划模式现在是独立的运行时叠加层，这里静默降级处理。
     if cfg.get("permission_mode") == "plan":
         cfg["permission_mode"] = "auto"
-    # 同时接受 ANTHROPIC_API_KEY 环境变量，以兼容旧版本
-    if not cfg.get("anthropic_api_key"):
-        cfg["anthropic_api_key"] = os.environ.get("ANTHROPIC_API_KEY", "")
+
+    project_secrets, project_secrets_path = _load_project_secrets()
+    cfg["_project_secrets"] = project_secrets
+    if project_secrets_path is not None:
+        cfg["_project_secrets_file"] = str(project_secrets_path)
     return cfg
 
 

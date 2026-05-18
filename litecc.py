@@ -399,9 +399,22 @@ def cmd_clear(_args: str, state, config) -> bool:
 # 管理配置
 def cmd_config(args: str, _state, config) -> bool:
     from config import save_config
+
+    def _is_secret_key(key: str) -> bool:
+        return key == "api_key" or key.endswith("_api_key")
+
+    def _display_value(key: str, value):
+        if _is_secret_key(key):
+            return "<hidden>" if value else ""
+        return value
+
     if not args:
-        # 隐藏 API 密钥后展示配置
-        display = {k: v for k, v in config.items() if k != "api_key"}
+        # 隐藏敏感字段后展示配置
+        display = {
+            k: _display_value(k, v)
+            for k, v in config.items()
+            if not k.startswith("_")
+        }
         print(json.dumps(display, indent=2))
     elif "=" in args:
         key, _, val = args.partition("=")
@@ -413,10 +426,11 @@ def cmd_config(args: str, _state, config) -> bool:
             val = int(val)
         config[key] = val
         save_config(config)
-        ok(f"已设置 {key} = {val}")
+        shown = _display_value(key, val)
+        ok(f"已设置 {key} = {shown}")
     else:
         k = args.strip()
-        v = config.get(k, "(未设置)")
+        v = _display_value(k, config.get(k, "(未设置)"))
         info(f"{k} = {v}")
     return True
 
@@ -2257,9 +2271,10 @@ def main():
         pname = detect_provider(config["model"])
         prov  = PROVIDERS.get(pname, {})
         env   = prov.get("api_key_env", "")
+        secrets_path = ".litecc/secrets.json"
         if env:
             warn(f"未找到提供商 '{pname}' 的 API 密钥。"
-                 f"设置环境变量 {env} 或执行: /config {pname}_api_key=你的密钥")
+                 f"设置环境变量 {env} 或在项目中创建 {secrets_path}")
 
     initial = " ".join(args.prompt) if args.prompt else None
     if args.print_mode and not initial:

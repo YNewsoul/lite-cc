@@ -181,16 +181,24 @@ def bare_model(model: str) -> str:
 
 def get_api_key(provider_name: str, config: dict) -> str:
     prov = PROVIDERS.get(provider_name, {})
-    # 1. 优先从配置字典读取（例如 config["kimi_api_key"]）
-    cfg_key = config.get(f"{provider_name}_api_key", "")
-    if cfg_key:
-        return cfg_key
-    # 2. 从环境变量读取
+    # 1. Environment variable wins.
     env_var = prov.get("api_key_env")
     if env_var:
         import os
-        return os.environ.get(env_var, "")
-    # 3. 硬编码默认值（本地厂商使用）
+        env_key = os.environ.get(env_var, "")
+        if env_key:
+            return env_key
+    # 2. Project-local secrets file injected by config.load_config().
+    project_secrets = config.get("_project_secrets", {})
+    if isinstance(project_secrets, dict):
+        project_key = project_secrets.get(f"{provider_name}_api_key", "")
+        if project_key:
+            return project_key
+    # 3. Fallback to config values for backward compatibility.
+    cfg_key = config.get(f"{provider_name}_api_key", "")
+    if cfg_key:
+        return cfg_key
+    # 4. Hard-coded provider default (if any).
     return prov.get("api_key", "")
 
 
