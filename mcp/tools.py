@@ -78,7 +78,7 @@ def initialize_mcp(verbose: bool = False) -> Dict[str, Optional[str]]:
         errors = mgr.connect_all()
         _connect_errors = errors
 
-        # Register tools from all successfully connected servers
+        # 注册所有连接成功的服务器所暴露的工具
         for client in mgr.list_servers():
             if client.state.value == "connected":
                 for tool in client._tools:
@@ -118,7 +118,7 @@ def get_connect_errors() -> Dict[str, Optional[str]]:
 
 
 # ── Auto-initialize on import ─────────────────────────────────────────────────
-# Connect in a background thread so startup is not blocked.
+# 在后台线程中建立连接，避免阻塞启动流程。
 
 def _background_init():
     try:

@@ -4,16 +4,16 @@ eval/batch_eval.py
 Batch-run pycc against a subset (or full set) of SWE-bench Lite.
 
 Usage:
-    # Run first 30 instances, 3 workers in parallel
+    # 运行前 30 个实例，并行使用 3 个 worker
     python eval/batch_eval.py --n 30 --workers 3 --workdir /tmp/swe_runs
 
-    # Run all 300
+    # 运行全部 300 个实例
     python eval/batch_eval.py --workers 3 --workdir /tmp/swe_runs
 
-    # Run specific instances
+    # 运行指定实例
     python eval/batch_eval.py --ids astropy__astropy-12907 django__django-11099
 
-    # Resume (skips instances with existing result.json)
+    # 断点续跑（跳过已经存在 result.json 的实例）
     python eval/batch_eval.py --n 30 --workdir /tmp/swe_runs
 
 After running, call score.py to get the resolve rate.
@@ -52,13 +52,13 @@ def main():
     workdir = Path(args.workdir)
     workdir.mkdir(parents=True, exist_ok=True)
 
-    # Load dataset
+    # 加载数据集
     print("Loading SWE-bench Lite dataset …")
     from datasets import load_dataset
     ds = load_dataset("princeton-nlp/SWE-bench_Lite", split="test")
     instances = list(ds)
 
-    # Filter
+    # 过滤实例
     if args.ids:
         id_set    = set(args.ids)
         instances = [r for r in instances if r["instance_id"] in id_set]

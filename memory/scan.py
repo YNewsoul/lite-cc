@@ -57,7 +57,7 @@ def scan_memory_dir(mem_dir: Path, scope: str) -> list[MemoryHeader]:
             continue
         try:
             stat = fp.stat()
-            # Read only the first 30 lines for frontmatter
+            # 只读取前 30 行 frontmatter，避免把整个文件都载入
             lines = fp.read_text(errors="replace").splitlines()[:30]
             snippet = "\n".join(lines)
             meta, _ = parse_frontmatter(snippet)

@@ -125,9 +125,9 @@ def run(
             tool_schemas=get_tool_schemas(),
             config=config,
         ):
-            if isinstance(event, (TextChunk, ThinkingChunk)): # 实时片段 → 立刻抛出去展示
+            if isinstance(event, (TextChunk, ThinkingChunk)):  # 实时片段：立刻抛出去展示
                 yield event
-            elif isinstance(event, Response): # 完整结果 → 暂时存起来，不展示
+            elif isinstance(event, Response):  # 完整结果：暂时存起来，不立即展示
                 response = event
 
         if response is None:
@@ -151,6 +151,7 @@ def run(
 
         state.total_input_tokens  += response.in_tokens
         state.total_output_tokens += response.out_tokens
+        # 当前这次模型回复完成
         yield TurnDone(response.in_tokens, response.out_tokens)
 
         # 停止钩子（每轮完成后触发）
@@ -158,7 +159,7 @@ def run(
         fire_stop(_finish_reason, config.get("_session_id", ""), config.get("_cwd", "."))
 
         if not response.tool_calls:
-            break   # 无工具调用 → 单轮对话完成
+            break  # 无工具调用：单轮对话完成
 
         # ── 执行工具 ────────────────────────────────────────────────
         for toolcall in response.tool_calls:
@@ -261,16 +262,16 @@ def _check_permission(toolcall: dict, config: dict) -> bool:
     if perm_mode == "accept-all":
         return True
     if perm_mode == "manual":
-        return False   # 始终询问用户
+        return False  # 始终询问用户
 
-    # auto 模式：安全的 Bash 命令自动批准；写操作 → 询问用户
+    # auto 模式下，安全的 Bash 命令自动批准；写操作需要询问用户
     if name in ("Read", "Glob", "Grep", "WebFetch", "WebSearch"):
         return True
     if name == "Bash":
         from security.bash_analyzer import analyze_bash, BashRiskLevel
         risk, _ = analyze_bash(toolcall["input"].get("command", ""))
         return risk == BashRiskLevel.safe
-    return False   # Write/Edit/NotebookEdit → 询问用户
+    return False  # Write/Edit/NotebookEdit 需要询问用户
 
 
 def _permission_desc(tc: dict) -> str:

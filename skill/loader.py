@@ -8,13 +8,15 @@ from typing import Optional
 
 @dataclass
 class SkillDef:
+    # SkillDef 是 skill 系统的核心数据结构。
+    # 它把“一个 markdown skill 文件”解析成运行期可消费的统一对象。
     name: str
     description: str
     triggers: list[str]          # ["/commit", "commit changes"]
     tools: list[str]             # ["Bash", "Read"]  (allowed-tools)
     prompt: str                  # full prompt body after frontmatter
     file_path: str
-    # Enhanced fields
+    # 扩展字段
     when_to_use: str = ""        # when Claude should auto-invoke this skill
     argument_hint: str = ""      # e.g. "[branch] [description]"
     arguments: list[str] = field(default_factory=list)  # named arg names
@@ -23,8 +25,8 @@ class SkillDef:
     source: str = "user"         # "user", "project", "builtin"
 
 
-# ── Directory paths ────────────────────────────────────────────────────────
-
+# skill 的搜索路径。
+# 项目级技能优先级最高，用于覆盖用户级或内置 skill。
 def _get_skill_paths() -> list[Path]:
     return [
         Path.cwd() / ".pycc" / "skills",   # project-level (priority)
@@ -32,8 +34,10 @@ def _get_skill_paths() -> list[Path]:
     ]
 
 
-# ── List field parser ──────────────────────────────────────────────────────
-
+# frontmatter 里有不少字段支持列表写法，例如：
+#   triggers: [/deploy, /ship]
+#   allowed-tools: [Bash, Read]
+# 这里统一把它们解析成 Python list[str]。
 def _parse_list_field(value: str) -> list[str]:
     """Parse YAML-like list: ``[a, b, c]`` or ``"a, b, c"``."""
     value = value.strip()
@@ -42,8 +46,10 @@ def _parse_list_field(value: str) -> list[str]:
     return [item.strip().strip('"').strip("'") for item in value.split(",") if item.strip()]
 
 
-# ── Single-file parser ─────────────────────────────────────────────────────
-
+# 解析单个 skill 文件。
+# 约定格式是：
+#   --- frontmatter ---
+#   <prompt body>
 def _parse_skill_file(path: Path, source: str = "user") -> Optional[SkillDef]:
     """Parse a markdown file with ``---`` frontmatter into a SkillDef.
 
@@ -64,6 +70,7 @@ def _parse_skill_file(path: Path, source: str = "user") -> Optional[SkillDef]:
     if len(parts) < 3:
         return None
 
+    # parts[1] 是 frontmatter，parts[2] 是真正的 prompt 模板正文。
     frontmatter_raw = parts[1].strip()
     prompt = parts[2].strip()
 
@@ -79,11 +86,13 @@ def _parse_skill_file(path: Path, source: str = "user") -> Optional[SkillDef]:
     if not name:
         return None
 
-    # allowed-tools wins over tools if present
+    # allowed-tools 的语义比旧字段 tools 更明确，因此优先级更高。
     tools_raw = fields.get("allowed-tools", fields.get("tools", ""))
     tools = _parse_list_field(tools_raw) if tools_raw else []
 
     triggers_raw = fields.get("triggers", "")
+    # 未配置 triggers 时，默认使用 /<name> 作为触发词。
+    # 触发器设置，为str 列表
     triggers = _parse_list_field(triggers_raw) if triggers_raw else [f"/{name}"]
 
     arguments_raw = fields.get("arguments", "")
@@ -108,27 +117,28 @@ def _parse_skill_file(path: Path, source: str = "user") -> Optional[SkillDef]:
     )
 
 
-# ── Registry of built-in skills (registered by builtin.py) ────────────────
-
+# 内置 skill 注册表。
+# builtin.py 导入后会往这里追加 SkillDef。
 _BUILTIN_SKILLS: list[SkillDef] = []
 
 
 def register_builtin_skill(skill: SkillDef) -> None:
+    # 这里不做去重，去重在 load_skills() 汇总阶段统一处理。
     _BUILTIN_SKILLS.append(skill)
 
 
-# ── Load all skills ────────────────────────────────────────────────────────
-
+# 加载所有 skill，并按优先级去重。
 def load_skills(include_builtins: bool = True) -> list[SkillDef]:
     """Return skills from disk + builtins, deduplicated (project > user > builtin)."""
     seen: dict[str, SkillDef] = {}
 
-    # Builtins go in first (lowest priority)
+    # 内置 skill 先放进去，作为最低优先级的默认值。
     if include_builtins:
         for sk in _BUILTIN_SKILLS:
             seen[sk.name] = sk
 
-    # User-level next, project-level last (highest priority)
+    # reversed 后会先遍历用户级，再遍历项目级；
+    # 同名 skill 会被后写入的项目级版本覆盖。
     skill_paths = _get_skill_paths()
     for i, skill_dir in enumerate(reversed(skill_paths)):
         src = "user" if i == 0 else "project"
@@ -148,6 +158,9 @@ def find_skill(query: str) -> Optional[SkillDef]:
     if not query:
         return None
 
+    # 这里只看第一段 trigger，是因为用户通常以：
+    #   /deploy prod
+    # 这种“触发词 + 参数”的形式调用 skill。
     first_word = query.split()[0]
     for skill in load_skills():
         for trigger in skill.triggers:
@@ -158,17 +171,20 @@ def find_skill(query: str) -> Optional[SkillDef]:
     return None
 
 
-# ── Argument substitution ─────────────────────────────────────────────────
-
+# 参数替换：把 skill 模板里的占位符，替换成用户这次传进来的参数
 def substitute_arguments(prompt: str, args: str, arg_names: list[str]) -> str:
     """Replace $ARGUMENTS (whole args string) and $ARG_NAME placeholders.
 
     Named args are positional: first word → first name, etc.
     """
-    # Always substitute $ARGUMENTS
+    # $ARGUMENTS 总是替换为完整参数字符串，适合保留原始输入。
     result = prompt.replace("$ARGUMENTS", args)
 
-    # Named args: split by whitespace
+    # 命名参数是“按位置”映射的，不做复杂 shell 解析。
+    # 例如 arguments=[env, version] 时：
+    #   /deploy staging 2.1.0
+    # 会得到：
+    #   $ENV=staging, $VERSION=2.1.0
     arg_values = args.split()
     for i, arg_name in enumerate(arg_names):
         placeholder = f"${arg_name.upper()}"

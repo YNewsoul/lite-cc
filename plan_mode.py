@@ -1,12 +1,12 @@
-"""Plan mode state management — independent of permission_mode.
+"""计划模式状态管理，与 permission_mode 相互独立。
 
-plan_mode is a runtime overlay that restricts writes to the plan file only.
-It is entirely separate from permission_mode ('auto' | 'manual' | 'accept-all').
+plan_mode 是一个运行时叠加层，只允许向计划文件写入内容。
+它与 permission_mode（'auto' | 'manual' | 'accept-all'）完全分离。
 
-Key principles:
-  - config["permission_mode"] governs permission policy only.
-  - config["_plan_mode_active"] indicates whether the plan overlay is active.
-  - Entering/exiting plan mode NEVER modifies permission_mode.
+核心原则：
+  - config["permission_mode"] 只负责权限策略本身。
+  - config["_plan_mode_active"] 表示计划模式叠加层是否启用。
+  - 进入或退出计划模式都不会修改 permission_mode。
 """
 from __future__ import annotations
 
@@ -15,17 +15,17 @@ from pathlib import Path
 
 
 def is_plan_mode(config: dict) -> bool:
-    """Return True if the plan mode overlay is currently active."""
+    """返回当前是否已启用计划模式叠加层。"""
     return bool(config.get("_plan_mode_active"))
 
 
 def get_plan_file(config: dict) -> str:
-    """Return the current plan file path (empty string if none)."""
+    """返回当前计划文件路径；如果不存在则返回空字符串。"""
     return config.get("_plan_file", "")
 
 
 def is_plan_file_target(config: dict, target: str) -> bool:
-    """Return True if *target* path matches the active plan file (path-normalised)."""
+    """判断目标路径在规范化后是否与当前计划文件一致。"""
     plan_file = get_plan_file(config)
     if not plan_file or not target:
         return False
@@ -33,11 +33,11 @@ def is_plan_file_target(config: dict, target: str) -> bool:
 
 
 def enter_plan_mode(config: dict, task_description: str = "") -> tuple[str, str]:
-    """Activate the plan mode overlay.
+    """启用计划模式叠加层。
 
-    - Does NOT modify config["permission_mode"].
-    - Creates .nano_claude/plans/<session_id>.md when it does not yet exist.
-    - Returns (message, plan_file_path).
+    - 不会修改 config["permission_mode"]。
+    - 若计划文件不存在，则创建 .nano_claude/plans/<session_id>.md。
+    - 返回 (message, plan_file_path)。
     """
     if is_plan_mode(config):
         return (
@@ -54,8 +54,8 @@ def enter_plan_mode(config: dict, task_description: str = "") -> tuple[str, str]
         header = f"# 计划：{task_description}\n\n" if task_description else "# 计划\n\n"
         plan_path.write_text(header, encoding="utf-8")
 
-    # Remember previous permission mode for display purposes only —
-    # we do NOT change permission_mode itself.
+    # 记录进入计划模式前的 permission_mode，仅用于提示展示；
+    # 实际上不会改动 permission_mode 本身。
     config["_plan_prev_permission_mode"] = config.get("permission_mode", "auto")
     config["_plan_mode_active"] = True
     config["_plan_file"] = str(plan_path)
@@ -76,11 +76,11 @@ def enter_plan_mode(config: dict, task_description: str = "") -> tuple[str, str]
 
 
 def exit_plan_mode(config: dict, require_nonempty: bool = True) -> tuple[str, str]:
-    """Deactivate the plan mode overlay.
+    """停用计划模式叠加层。
 
-    - Does NOT restore permission_mode (it was never changed).
-    - Clears _plan_mode_active; keeps _plan_file so /plan can show history.
-    - Returns (message, plan_content).
+    - 不会恢复 permission_mode，因为它从未被修改过。
+    - 清除 _plan_mode_active，但保留 _plan_file，方便 /plan 查看历史。
+    - 返回 (message, plan_content)。
     """
     if not is_plan_mode(config):
         return "未处于计划模式。请先调用 EnterPlanMode。", ""
@@ -97,10 +97,10 @@ def exit_plan_mode(config: dict, require_nonempty: bool = True) -> tuple[str, st
 
     prev_perm = config.get("_plan_prev_permission_mode", config.get("permission_mode", "auto"))
 
-    # Deactivate — permission_mode stays exactly as-is
+    # 停用计划模式，但保持 permission_mode 完全不变。
     config["_plan_mode_active"] = False
     config.pop("_plan_task", None)
-    # Intentionally keep _plan_file so /plan (no args) can still show the file
+    # 有意保留 _plan_file，这样 /plan（无参数）仍能展示该文件。
 
     message = (
         f"计划限制层已停用。\n"

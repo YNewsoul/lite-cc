@@ -15,10 +15,10 @@ B) OFFICIAL (requires Docker) — swebench.harness
    Produces ground-truth resolve rate.
 
 Usage:
-    # Fast heuristic estimate (no Docker needed)
+      快速启发式估算（无需 Docker）
     python eval/score.py --workdir /tmp/swe_runs
 
-    # Official scoring (requires Docker + swebench images)
+      官方评分流程（需要 Docker 和 swebench 镜像）
     python eval/score.py --workdir /tmp/swe_runs --official
 """
 from __future__ import annotations
@@ -50,14 +50,14 @@ def _heuristic_score(result: dict, instance: dict) -> bool:
     if isinstance(fail_tests, str):
         fail_tests = json.loads(fail_tests)
 
-    # Extract file stems from test paths like
+    # 从如下形式的测试路径中提取文件主名：
     # "astropy/modeling/tests/test_separable.py::test_func"
     for test_path in fail_tests:
-        file_part = test_path.split("::")[0]          # e.g. astropy/modeling/tests/test_separable.py
-        module    = Path(file_part).stem               # e.g. test_separable
-        # Check if patch modifies any file in the same package sub-directory
-        pkg_dir   = str(Path(file_part).parent)       # e.g. astropy/modeling/tests
-        pkg_parent = str(Path(file_part).parent.parent)  # e.g. astropy/modeling
+        file_part = test_path.split("::")[0]  # 例如 astropy/modeling/tests/test_separable.py
+        module    = Path(file_part).stem  # 例如 test_separable
+        # 检查补丁是否修改了同一包子目录下的任意文件
+        pkg_dir   = str(Path(file_part).parent)  # 例如 astropy/modeling/tests
+        pkg_parent = str(Path(file_part).parent.parent)  # 例如 astropy/modeling
         if pkg_parent in patch or module in patch:
             return True
 
@@ -135,7 +135,7 @@ def _score_official(results: list[dict], workdir: Path) -> None:
         print("ERROR: swebench.harness not found. Install with: pip install swebench")
         sys.exit(1)
 
-    # Build predictions file in swebench format
+    # 构建 swebench 格式的 predictions 文件
     predictions = []
     for r in results:
         if r.get("patch"):
@@ -154,7 +154,7 @@ def _score_official(results: list[dict], workdir: Path) -> None:
     print(f"Predictions file: {pred_file}")
     print(f"This requires Docker and will take a while.\n")
 
-    # Call swebench harness
+    # 调用 swebench 评测框架
     sys.argv = [
         "run_evaluation",
         "--dataset_name", "princeton-nlp/SWE-bench_Lite",

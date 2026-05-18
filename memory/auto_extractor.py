@@ -24,11 +24,11 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
-# Cooldown between extractions, in seconds (30 min)
+# 两次自动提取之间的冷却时间，单位秒（30 分钟）
 _EXTRACT_COOLDOWN_S = 1800
-# Minimum session wall-clock time before extraction makes sense (5 min)
+# 会话持续时间至少达到这个值后，自动提取才有意义（5 分钟）
 _MIN_DURATION_S = 300
-# Minimum turns
+# 最少轮次数
 _MIN_TURNS = 10
 
 _EXTRACTION_SYSTEM = """\
@@ -200,7 +200,7 @@ def _do_extraction(messages: list[dict], config: dict,
     except Exception:
         return 0
 
-    # Strip markdown fences if model wrapped output
+    # 如果模型把输出包在 Markdown 代码块中，这里去掉围栏
     text = result_text.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[-1]
@@ -239,7 +239,7 @@ def maybe_extract_memories(
     if time.time() - last < _EXTRACT_COOLDOWN_S:
         return
 
-    # Take a snapshot of messages (the list may be mutated after this)
+    # 先复制一份消息快照，避免后续原列表被继续修改
     msgs_snapshot = list(messages)
 
     def _worker() -> None:

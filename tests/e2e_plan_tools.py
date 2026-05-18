@@ -42,7 +42,7 @@ def _run(tmpdir):
     print("STEP 1: EnterPlanMode")
     print(SEP)
     result = _enter_plan_mode({"task_description": "Add WebSocket support"}, config)
-    # permission_mode must NOT change
+    # permission_mode 不应发生变化
     assert config["permission_mode"] == "auto", \
         f"permission_mode should stay 'auto', got {config['permission_mode']!r}"
     assert config.get("_plan_mode_active") is True, "_plan_mode_active should be True"
@@ -70,23 +70,23 @@ def _run(tmpdir):
     print("STEP 3: Permission checks")
     print(SEP)
 
-    # Reads allowed
+    # 读取操作应被允许
     assert _check_permission({"name": "Read", "input": {}}, config) == True
     assert _check_permission({"name": "Glob", "input": {}}, config) == True
     assert _check_permission({"name": "Grep", "input": {}}, config) == True
     print("  Reads: allowed")
 
-    # Writes blocked
+    # 写入操作应被阻止
     assert _check_permission({"name": "Write", "input": {"file_path": str(tmpdir / "x.py")}}, config) == False
     assert _check_permission({"name": "Edit", "input": {"file_path": str(tmpdir / "x.py")}}, config) == False
     print("  Writes to other files: blocked")
 
-    # Write to plan file allowed
+    # 允许写入计划文件
     assert _check_permission({"name": "Write", "input": {"file_path": str(plan_path)}}, config) == True
     assert _check_permission({"name": "Edit", "input": {"file_path": str(plan_path)}}, config) == True
     print("  Writes to plan file: allowed")
 
-    # Plan tools always auto-approved
+    # 计划模式工具始终自动批准
     assert _check_permission({"name": "EnterPlanMode", "input": {}}, config) == True
     assert _check_permission({"name": "ExitPlanMode", "input": {}}, config) == True
     print("  Plan tools: auto-approved")
@@ -96,13 +96,13 @@ def _run(tmpdir):
     print(f"\n{SEP}")
     print("STEP 4: ExitPlanMode with empty plan")
     print(SEP)
-    # Plan file currently has just the header
+    # 计划文件当前只有标题
     result = _exit_plan_mode({}, config)
     if "空" in result or "empty" in result.lower():
         print(f"  Correctly rejected: {result[:80]}")
         assert config.get("_plan_mode_active") is True, "_plan_mode_active should still be True"
     else:
-        # Header counts as content — that's fine too
+        # 只有标题也算有内容，这同样可以接受
         print(f"  Header accepted as plan content")
     print("  PASS")
 
@@ -110,7 +110,7 @@ def _run(tmpdir):
     print(f"\n{SEP}")
     print("STEP 5: Write plan content and ExitPlanMode")
     print(SEP)
-    # Ensure we're in plan mode
+    # 确保当前已经处于计划模式
     config["_plan_mode_active"] = True
     plan_path.write_text(
         "# Plan: Add WebSocket support\n\n"
@@ -120,7 +120,7 @@ def _run(tmpdir):
         encoding="utf-8",
     )
     result = _exit_plan_mode({}, config)
-    # permission_mode must NOT change
+    # permission_mode 不应发生变化
     assert config["permission_mode"] == "auto", \
         f"permission_mode should stay 'auto', got {config['permission_mode']!r}"
     assert config.get("_plan_mode_active") is False, "_plan_mode_active should be False"
@@ -170,7 +170,7 @@ def _run(tmpdir):
     assert "complex" in prompt.lower() or "multi-file" in prompt.lower() or "复杂" in prompt
     print("  System prompt references plan tools")
 
-    # Plan mode active → system prompt should include plan file reference
+    # 计划模式启用时，system prompt 应包含计划文件引用
     config["_plan_mode_active"] = True
     config["_plan_file"] = str(plan_path)
     prompt_plan = build_system_prompt(config)

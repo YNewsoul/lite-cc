@@ -36,7 +36,7 @@ def test_commands():
 
 
 def _run_tests(tmpdir):
-    # Import after chdir so paths resolve correctly
+    # 先 chdir，再导入模块，确保路径解析正确
     from pycc import cmd_init, cmd_export, cmd_copy, cmd_status, info, err
 
     state = FakeState(messages=[
@@ -60,23 +60,23 @@ def _run_tests(tmpdir):
     assert result == True
     assert (tmpdir / "CLAUDE.md").exists()
     content = (tmpdir / "CLAUDE.md").read_text(encoding="utf-8")
-    assert "## Project Overview" in content
-    assert tmpdir.name in content  # project name from dir
+    assert "   Project Overview" in content
+    assert tmpdir.name in content  # 目录名应出现在模板中
     print(f"  Created CLAUDE.md ({len(content)} chars)")
     print("  PASS")
 
-    # ── Step 2: /init — already exists ──
+    # ── Step 2: /init（已存在） ──
     print(f"\n{SEP}")
     print("STEP 2: /init — refuses if CLAUDE.md exists")
     print(SEP)
     result = cmd_init("", state, config)
-    assert result == True  # handled, but didn't overwrite
-    # Content should be unchanged
+    assert result == True  # 已处理，但不应覆盖原文件
+    # 内容应保持不变
     assert (tmpdir / "CLAUDE.md").read_text(encoding="utf-8") == content
     print("  Correctly refused to overwrite")
     print("  PASS")
 
-    # ── Step 3: /export (markdown) ──
+    # ── Step 3: /export（markdown） ──
     print(f"\n{SEP}")
     print("STEP 3: /export — default markdown export")
     print(SEP)
@@ -86,13 +86,13 @@ def _run_tests(tmpdir):
     exports = list(export_dir.glob("conversation_*.md"))
     assert len(exports) == 1
     md_content = exports[0].read_text(encoding="utf-8")
-    assert "## User" in md_content
-    assert "## Assistant" in md_content
+    assert "   User" in md_content
+    assert "   Assistant" in md_content
     assert "hello world" in md_content.lower() or "Hello, World!" in md_content
     print(f"  Exported to {exports[0].name} ({len(md_content)} chars)")
     print("  PASS")
 
-    # ── Step 4: /export (json) ──
+    # ── Step 4: /export（json） ──
     print(f"\n{SEP}")
     print("STEP 4: /export <file.json> — JSON export")
     print(SEP)
@@ -105,13 +105,13 @@ def _run_tests(tmpdir):
     print(f"  Exported {len(data)} messages to JSON")
     print("  PASS")
 
-    # ── Step 5: /export — empty conversation ──
+    # ── Step 5: /export（空会话） ──
     print(f"\n{SEP}")
     print("STEP 5: /export — empty conversation")
     print(SEP)
     empty_state = FakeState(messages=[])
     result = cmd_export("", empty_state, config)
-    assert result == True  # handled gracefully
+    assert result == True  # 应平稳处理
     print("  Handled empty conversation")
     print("  PASS")
 
@@ -119,7 +119,7 @@ def _run_tests(tmpdir):
     print(f"\n{SEP}")
     print("STEP 6: /copy — copies last assistant response")
     print(SEP)
-    # Mock clipboard to capture output
+    # 模拟剪贴板以捕获输出
     captured = []
     import subprocess as sp
 
@@ -134,13 +134,13 @@ def _run_tests(tmpdir):
         result = cmd_copy("", state, config)
     assert result == True
     assert len(captured) == 1
-    # Check the copied content contains the last assistant message
+    # 检查复制出的内容中包含最后一条 assistant 消息
     copied_text = captured[0].decode("utf-16le") if sys.platform == "win32" else captured[0].decode("utf-8")
     assert "docstring" in copied_text or "Say hello" in copied_text
     print(f"  Copied {len(copied_text)} chars")
     print("  PASS")
 
-    # ── Step 7: /copy — no assistant messages ──
+    # ── Step 7: /copy（没有 assistant 消息） ──
     print(f"\n{SEP}")
     print("STEP 7: /copy — no assistant messages")
     print(SEP)
@@ -168,7 +168,7 @@ def _run_tests(tmpdir):
     print(output.strip())
     print("  PASS")
 
-    # ── Step 9: /status in plan mode ──
+    # ── Step 9: 计划模式下的 /status ──
     print(f"\n{SEP}")
     print("STEP 9: /status — plan mode indicator")
     print(SEP)

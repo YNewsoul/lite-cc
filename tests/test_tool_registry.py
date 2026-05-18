@@ -49,7 +49,7 @@ def _make_echo_tool(name: str = "echo", read_only: bool = False) -> ToolDef:
 
 
 # ------------------------------------------------------------------
-# register and get
+# register/get 相关测试
 # ------------------------------------------------------------------
 
 def test_register_and_get():
@@ -65,7 +65,7 @@ def test_get_unknown_returns_none():
 
 
 # ------------------------------------------------------------------
-# get_all_tools
+# get_all_tools 相关测试
 # ------------------------------------------------------------------
 
 def test_get_all_tools_empty():
@@ -80,7 +80,7 @@ def test_get_all_tools():
 
 
 # ------------------------------------------------------------------
-# get_tool_schemas
+# get_tool_schemas 相关测试
 # ------------------------------------------------------------------
 
 def test_get_tool_schemas():
@@ -91,7 +91,7 @@ def test_get_tool_schemas():
 
 
 # ------------------------------------------------------------------
-# execute_tool
+# execute_tool 相关测试
 # ------------------------------------------------------------------
 
 def test_execute_tool():
@@ -106,7 +106,7 @@ def test_execute_unknown_tool():
 
 
 # ------------------------------------------------------------------
-# output truncation
+# 输出截断相关测试
 # ------------------------------------------------------------------
 
 def test_small_result_not_truncated():
@@ -168,7 +168,7 @@ def test_no_truncation_when_within_limit():
 
 
 # ------------------------------------------------------------------
-# duplicate register overwrites
+# 重复注册应覆盖旧定义
 # ------------------------------------------------------------------
 
 def test_duplicate_register_overwrites():

@@ -1,11 +1,11 @@
-"""Context window management: five-layer compression for long conversations.
+"""上下文窗口管理：针对长对话的五层压缩机制。
 
-Layers (in order of invocation):
-  Layer 1: Disk offload of large tool results    — tool_registry.py
-  Layer 2: Remove old complete turns             — snip_old_messages()
-  Layer 3: Micro-compact clearable tool results  — micro_compact()
-  Layer 4: Read-time context collapse            — apply_context_collapse()  [called from agent.py]
-  Layer 5: Full LLM summary                      — compact_messages()
+各层触发顺序如下：
+  第 1 层：大工具结果落盘                 — tool_registry.py
+  第 2 层：移除较早的完整轮次             — snip_old_messages()
+  第 3 层：微压缩可清理的工具结果         — micro_compact()
+  第 4 层：读取时的上下文折叠             — apply_context_collapse()  [由 agent.py 调用]
+  第 5 层：完整的 LLM 摘要压缩            — compact_messages()
 """
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ import providers
 from plan_mode import is_plan_mode
 
 
-# ── Token estimation ──────────────────────────────────────────────────────
+# ── Token 估算 ─────────────────────────────────────────────────────────────
 
 def estimate_tokens(messages: list) -> int:
-    """Estimate token count by summing content lengths / 3.5."""
+    """通过累计内容长度再除以 3.5 来粗略估算 token 数。"""
     total_chars = 0
     for m in messages:
         content = m.get("content", "")
@@ -40,31 +40,31 @@ def estimate_tokens(messages: list) -> int:
 
 
 def get_context_limit(model: str) -> int:
-    """Look up context window size for a model."""
+    """查询指定模型的上下文窗口大小。"""
     provider_name = providers.detect_provider(model)
     prov = providers.PROVIDERS.get(provider_name, {})
     return prov.get("context_limit", 128_000)
 
 
-# ── Layer 2: Remove old turns ──────────────────────────────────────────────
+# ── 第 2 层：移除旧轮次 ─────────────────────────────────────────────────────
 
 def snip_old_messages(
     messages: list,
     preserve_last_n_turns: int = 6,
 ) -> int:
-    """Remove old complete conversation turns from the front of history.
+    """从历史前部移除较早的完整对话轮次。
 
-    A "turn" is an assistant message plus all its following tool-result messages.
-    Removed turns are replaced by a single boundary marker user message.
+    这里的“轮次”是指一条 assistant 消息，以及紧随其后的所有 tool 结果消息。
+    被移除的轮次会被替换成一条边界提示 user 消息和一条 assistant 确认消息。
 
-    Args:
-        messages:             list of message dicts (mutated in place)
-        preserve_last_n_turns: number of assistant+tool turns to keep
+    参数：
+        messages:              消息字典列表，会被原地修改
+        preserve_last_n_turns: 要保留的 assistant+tool 轮次数量
 
-    Returns:
-        Approximate tokens freed.
+    返回：
+        估算释放掉的 token 数。
     """
-    # Identify turn boundaries: (start_idx, end_idx_exclusive)
+    # 识别轮次边界：(start_idx, end_idx_exclusive)
     turns: list[tuple[int, int]] = []
     i = 0
     while i < len(messages):
@@ -101,25 +101,24 @@ def snip_old_messages(
     return freed
 
 
-# ── Layer 3: Micro-compact ─────────────────────────────────────────────────
+# ── 第 3 层：微压缩 ─────────────────────────────────────────────────────────
 
-# Tools whose results can safely be cleared (re-fetchable from disk/web)
+# 这些工具的结果可以安全清空，因为可从磁盘或网络重新获取。
 _CLEARABLE_TOOLS = {"Read", "Bash", "Glob", "Grep", "WebFetch", "WebSearch", "Edit", "Write"}
-# Tools whose results must be preserved
+# 这些工具的结果必须保留。
 _PRESERVE_TOOLS  = {"Agent", "TaskCreate", "TaskUpdate", "TaskGet", "TaskList"}
 
-_MICRO_COMPACT_IDLE_MINUTES = 60   # trigger threshold
+_MICRO_COMPACT_IDLE_MINUTES = 60   # 触发阈值
 
 
 def micro_compact(messages: list, config: dict) -> int:
-    """Clear old re-fetchable tool results when prompt cache is likely expired.
+    """在 prompt cache 很可能已失效时，清除较旧且可重新获取的工具结果。
 
-    Keeps the most recent 5 clearable tool results verbatim; replaces
-    older ones with a placeholder. Only fires when the agent has been idle
-    for more than _MICRO_COMPACT_IDLE_MINUTES.
+    会保留最近 5 条可清理工具结果的原始内容，更早的则替换为占位文本。
+    只有当 agent 空闲时间超过 _MICRO_COMPACT_IDLE_MINUTES 时才会触发。
 
-    Returns:
-        Number of tool result messages cleared.
+    返回：
+        被清空的工具结果消息数量。
     """
     last_call = config.get("_last_api_call_time")
     if last_call is None:
@@ -128,7 +127,7 @@ def micro_compact(messages: list, config: dict) -> int:
     if idle_min < _MICRO_COMPACT_IDLE_MINUTES:
         return 0
 
-    # Collect indices of clearable tool results (oldest first)
+    # 收集可清理的工具结果索引（按从旧到新顺序）
     clearable: list[int] = []
     for i, m in enumerate(messages):
         if m.get("role") != "tool":
@@ -137,32 +136,32 @@ def micro_compact(messages: list, config: dict) -> int:
         if tool_name in _CLEARABLE_TOOLS and tool_name not in _PRESERVE_TOOLS:
             clearable.append(i)
 
-    # Keep last 5, clear the rest
+    # 保留最近 5 条，其余清空
     to_clear = clearable[:-5] if len(clearable) > 5 else []
     for i in to_clear:
         messages[i]["content"] = "[Old tool result content cleared]"
     return len(to_clear)
 
 
-# ── Layer 4: Context collapse (read-time projection) ─────────────────────
+# ── 第 4 层：上下文折叠（读取时投影） ───────────────────────────────────────
 
 def apply_context_collapse(messages: list, config: dict) -> list:
-    """Return a compressed view of messages for this API call only.
+    """仅为本次 API 调用返回一个压缩后的消息视图。
 
-    Does NOT modify `messages`. Returns a new list.
+    不会修改 `messages` 本身，而是返回一个新列表。
 
-    Thresholds:
-      90 %  → keep most-recent 40 % of tokens verbatim, summarise the rest
-      95 %  → keep most-recent 25 % of tokens verbatim, summarise the rest
+    阈值规则：
+      90 %  → 最近约 40 % token 保留原文，更早部分做摘要
+      95 %  → 最近约 25 % token 保留原文，更早部分做摘要
 
-    Args:
-        messages: current state.messages (not mutated)
-        config:   agent config dict
+    参数：
+        messages: 当前 state.messages，不会被修改
+        config:   agent 配置字典
 
-    Returns:
-        Possibly-compressed message list for the API call.
+    返回：
+        本次 API 调用要使用的、可能经过压缩的消息列表。
     """
-    # Guard: never recurse from inside a summarisation call
+    # 保护措施：摘要调用内部不能再次递归进入折叠逻辑
     if config.get("_in_collapse"):
         return messages
 
@@ -189,7 +188,7 @@ def apply_context_collapse(messages: list, config: dict) -> list:
     summary = _collapse_summarize(old, collapse_config)
 
     if not summary:
-        # Summarisation failed — light truncation fallback
+        # 摘要失败时，退回到轻量截断策略
         truncated_old: list[dict] = []
         for m in old:
             body = m.get("content", "")
@@ -206,7 +205,7 @@ def apply_context_collapse(messages: list, config: dict) -> list:
 
 
 def _collapse_summarize(old_messages: list, config: dict) -> str:
-    """Call the LLM with a compact prompt to summarise old_messages."""
+    """用紧凑提示词调用 LLM，为 old_messages 生成摘要。"""
     old_text = _format_for_summary(old_messages, max_chars=40_000)
     prompt = (
         "Summarise the following conversation history in 3-5 concise paragraphs. "
@@ -230,9 +229,9 @@ def _collapse_summarize(old_messages: list, config: dict) -> str:
         return ""
 
 
-# ── Layer 5: Full LLM summary ─────────────────────────────────────────────
+# ── 第 5 层：完整 LLM 摘要 ─────────────────────────────────────────────────
 
-# Structured 9-dimension summary prompt
+# 结构化的 9 维摘要系统提示词
 _COMPACT_SYSTEM = "You are an expert at distilling technical conversation histories."
 
 _COMPACT_PROMPT_TEMPLATE = """\
@@ -255,25 +254,25 @@ Summarise the following conversation. Produce a structured summary with ALL nine
 
 
 def compact_messages(messages: list, config: dict, focus: str = "") -> list:
-    """Compress old messages into a structured LLM summary (Layer 5).
+    """把旧消息压缩成结构化的 LLM 摘要（第 5 层）。
 
-    Features:
-    - Structured 9-dimension prompt (no content[:500] truncation)
-    - Circuit breaker: stops after 3 consecutive failures
-    - Post-compact restoration: re-injects recently accessed files + plan file
+    特性：
+    - 使用结构化的 9 维提示词，不做 content[:500] 这种简单截断
+    - 带熔断器：连续失败 3 次后停止尝试
+    - 压缩后恢复：重新注入最近访问的文件和计划文件
 
-    Args:
-        messages: full message list
-        config:   agent config dict (must contain "model")
-        focus:    optional extra focus instruction
+    参数：
+        messages: 完整消息列表
+        config:   agent 配置字典（必须包含 "model"）
+        focus:    可选的额外关注点说明
 
-    Returns:
-        New compacted message list, or original on failure.
+    返回：
+        成功时返回压缩后的新消息列表；失败时返回原始列表。
     """
-    # Circuit breaker
+    # 熔断器
     failures = config.get("_compact_failures", 0)
     if failures >= 3:
-        # Give up on LLM compaction; just return as-is
+        # 放弃 LLM 压缩，直接原样返回
         return messages
 
     split = find_split_point(messages)
@@ -308,9 +307,9 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
 
     except Exception:
         config["_compact_failures"] = failures + 1
-        return messages  # fallback: keep original
+        return messages  # 兜底：保留原始消息
 
-    # Reset failure counter on success
+    # 成功后重置失败计数器
     config["_compact_failures"] = 0
 
     summary_msg = {
@@ -323,22 +322,22 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
     }
     compacted = [summary_msg, ack_msg, *recent]
 
-    # Post-compact restoration
+    # 压缩后的恢复注入
     compacted.extend(_restore_recent_files(config))
     compacted.extend(_restore_active_skills(config))
 
     return compacted
 
 
-# ── Post-compact restoration ───────────────────────────────────────────────
+# ── 压缩后恢复 ─────────────────────────────────────────────────────────────
 
 def _restore_recent_files(config: dict, max_files: int = 5, token_budget: int = 50_000) -> list:
-    """Re-inject the most recently accessed files after compaction."""
+    """在压缩后重新注入最近访问的文件内容。"""
     log: dict = config.get("_file_access_log", {})
     if not log:
         return []
 
-    # Sort by most recently accessed
+    # 按最近访问时间倒序排序
     sorted_paths = sorted(log.items(), key=lambda kv: kv[1], reverse=True)
 
     injections: list[dict] = []
@@ -355,7 +354,7 @@ def _restore_recent_files(config: dict, max_files: int = 5, token_budget: int = 
 
         snippet_tokens = int(len(content) / 3.5)
         if tokens_used + snippet_tokens > token_budget:
-            # Truncate to fit budget
+            # 为了不超预算，对内容做截断
             allowed_chars = int((token_budget - tokens_used) * 3.5)
             if allowed_chars < 200:
                 break
@@ -378,7 +377,7 @@ def _restore_recent_files(config: dict, max_files: int = 5, token_budget: int = 
 
 
 def _restore_active_skills(config: dict, token_budget: int = 25_000) -> list:
-    """Re-inject active skill content after compaction (best-effort)."""
+    """在压缩后重新注入活跃的 skill 内容（尽力而为）。"""
     active_skill = config.get("_active_skill_content", "")
     if not active_skill:
         return []
@@ -392,7 +391,7 @@ def _restore_active_skills(config: dict, token_budget: int = 25_000) -> list:
 
 
 def _restore_plan_context(config: dict) -> list:
-    """If in plan mode, return messages that restore plan file context."""
+    """若当前处于计划模式，则返回恢复计划文件上下文所需的消息。"""
     plan_file = config.get("_plan_file", "")
     if not plan_file or not is_plan_mode(config):
         return []
@@ -408,10 +407,10 @@ def _restore_plan_context(config: dict) -> list:
     ]
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────
+# ── 辅助函数 ───────────────────────────────────────────────────────────────
 
 def find_split_point(messages: list, keep_ratio: float = 0.3) -> int:
-    """Find index where recent portion holds ~keep_ratio of total tokens."""
+    """找到一个切分点，使较新的部分大约占总 token 的 keep_ratio。"""
     total = estimate_tokens(messages)
     if total == 0:
         return 0
@@ -425,7 +424,7 @@ def find_split_point(messages: list, keep_ratio: float = 0.3) -> int:
 
 
 def _format_for_summary(messages: list, max_chars: int = 80_000) -> str:
-    """Render messages as readable text for the summariser, up to max_chars."""
+    """把消息渲染成便于摘要器读取的文本，长度最多到 max_chars。"""
     lines: list[str] = []
     total = 0
     for m in messages:
@@ -446,23 +445,23 @@ def _format_for_summary(messages: list, max_chars: int = 80_000) -> str:
     return "\n".join(lines)
 
 
-# ── Main entry ─────────────────────────────────────────────────────────────
+# ── 主入口 ─────────────────────────────────────────────────────────────────
 
 def maybe_compact(state, config: dict) -> bool:
-    """Check if context window is getting full and compress if needed.
+    """检查上下文窗口是否接近上限，并在需要时执行压缩。
 
-    Layer order:
-      2. snip_old_messages  — removes whole old turns, returns freed count
-      3. micro_compact      — clears re-fetchable tool results on long idle
-      (4. apply_context_collapse — called separately in agent.py before API)
-      5. compact_messages   — full LLM summary if still over threshold
+    各层顺序：
+      2. snip_old_messages  — 移除完整的旧轮次，并返回释放量
+      3. micro_compact      — 长时间空闲后清空可重新获取的工具结果
+      (4. apply_context_collapse — 在 agent.py 中于 API 调用前单独执行)
+      5. compact_messages   — 若仍超阈值，则执行完整 LLM 摘要
 
-    Args:
-        state:  AgentState with .messages list
-        config: agent config dict (must contain "model")
+    参数：
+        state:  带有 .messages 列表的 AgentState
+        config: agent 配置字典（必须包含 "model"）
 
-    Returns:
-        True if any compaction was performed.
+    返回：
+        是否执行过任意压缩操作。
     """
     model     = config.get("model", "")
     limit     = get_context_limit(model)
@@ -471,16 +470,16 @@ def maybe_compact(state, config: dict) -> bool:
     if estimate_tokens(state.messages) <= threshold:
         return False
 
-    # Layer 2: remove old complete turns
+    # 第 2 层：移除较早的完整轮次
     snip_old_messages(state.messages)
 
-    # Layer 3: micro-compact clearable tools on long idle
+    # 第 3 层：长时间空闲时，微压缩可清理工具结果
     micro_compact(state.messages, config)
 
     if estimate_tokens(state.messages) <= threshold:
         return True
 
-    # Pre-compact hook
+    # 压缩前 hook
     try:
         from hooks.dispatcher import fire_pre_compact as _fire_pre_compact
         _fire_pre_compact(
@@ -492,18 +491,18 @@ def maybe_compact(state, config: dict) -> bool:
     except Exception:
         pass
 
-    # Layer 5: full LLM summary
+    # 第 5 层：完整 LLM 摘要
     state.messages = compact_messages(state.messages, config)
     state.messages.extend(_restore_plan_context(config))
     return True
 
 
-# ── Manual compact ────────────────────────────────────────────────────────
+# ── 手动压缩 ───────────────────────────────────────────────────────────────
 
 def manual_compact(state, config: dict, focus: str = "") -> tuple[bool, str]:
-    """User-triggered compaction via /compact. Not gated by threshold.
+    """通过 /compact 触发的手动压缩，不受自动阈值限制。
 
-    Returns (success, info_message).
+    返回 (success, info_message)。
     """
     if len(state.messages) < 4:
         return False, "Not enough messages to compact."

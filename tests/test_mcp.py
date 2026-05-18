@@ -127,7 +127,7 @@ class TestConfig:
         user_cfg.write_text(json.dumps({
             "mcpServers": {"git": {"command": "old-cmd"}}
         }))
-        # Write project config in cwd
+        # 在当前工作目录写入项目配置
         project_cfg = Path.cwd() / ".mcp_test.json"
         project_cfg.write_text(json.dumps({
             "mcpServers": {"git": {"command": "new-cmd"}}
@@ -271,7 +271,7 @@ class TestMCPClient:
         }]}
         client = self._make_client(t)
         tools = client.list_tools()
-        # Dashes and dots should be replaced with underscores
+        # 连字符和点号应被替换为下划线
         assert "-" not in tools[0].qualified_name
         assert "." not in tools[0].qualified_name
 
@@ -329,7 +329,7 @@ class TestMCPManager:
         mgr = MCPManager()
         cfg = MCPServerConfig.from_dict("s", {"command": "x"})
         client = mgr.add_server(cfg)
-        # Manually set up connected state
+        # 手动构造已连接状态
         client.state = MCPServerState.CONNECTED
         client._tools = [MCPTool("s", "my_tool", "mcp__s__my_tool", "desc", {})]
         tools = mgr.all_tools()
@@ -349,20 +349,20 @@ class TestStdioTransportEcho:
 
     ECHO_SERVER = """
 import sys, json
-# Handshake
+# Handshake 相关测试
 line = sys.stdin.readline()
 req = json.loads(line)
 resp = {"jsonrpc": "2.0", "id": req["id"], "result": {"capabilities": {"tools": {}}, "serverInfo": {"name": "echo", "version": "0.1"}, "protocolVersion": "2024-11-05"}}
 sys.stdout.write(json.dumps(resp) + "\\n")
 sys.stdout.flush()
-# tools/list
+# tools/list 相关测试
 line = sys.stdin.readline()  # notifications/initialized (no response needed)
 line = sys.stdin.readline()
 req = json.loads(line)
 resp = {"jsonrpc": "2.0", "id": req["id"], "result": {"tools": [{"name": "echo", "description": "echo tool", "inputSchema": {"type": "object", "properties": {"msg": {"type": "string"}}}}]}}
 sys.stdout.write(json.dumps(resp) + "\\n")
 sys.stdout.flush()
-# tools/call
+# tools/call 相关测试
 line = sys.stdin.readline()
 req = json.loads(line)
 resp = {"jsonrpc": "2.0", "id": req["id"], "result": {"content": [{"type": "text", "text": req["params"]["arguments"].get("msg", "hello")}], "isError": False}}

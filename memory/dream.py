@@ -123,7 +123,7 @@ def _apply_consolidation(plan: dict, entries: list[dict]) -> tuple[int, int, int
     merged  = 0
     errors  = 0
 
-    # Delete
+    # 删除旧记忆
     for name in plan.get("delete", []):
         entry = name_to_entry.get(name)
         if not entry:
@@ -134,7 +134,7 @@ def _apply_consolidation(plan: dict, entries: list[dict]) -> tuple[int, int, int
         except Exception:
             errors += 1
 
-    # Merge: delete originals, write new combined entry
+    # 合并：删除原条目，并写入新的合并结果
     for m in plan.get("merge", []):
         replaces = m.get("replaces", [])
         for name in replaces:
@@ -235,7 +235,7 @@ def _do_consolidation(config: dict, verbose: bool = False) -> str:
 def consolidate(config: dict, verbose: bool = False) -> str:
     """Synchronous consolidation — used by /memory consolidate."""
     result = _do_consolidation(config, verbose)
-    # Reset session counter after manual consolidation
+    # 手动整合后重置会话计数器
     meta = _get_dream_meta()
     meta["sessions_since"] = 0
     meta["last_time"] = time.time()

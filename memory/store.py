@@ -21,7 +21,7 @@ from typing import Literal
 USER_MEMORY_DIR = Path.home() / ".pycc" / "memory"
 INDEX_FILENAME = "MEMORY.md"
 
-# Maximum lines/bytes for the index file (mirrors Claude Code limits)
+# 索引文件允许的最大行数/字节数（与 Claude Code 的限制保持一致）
 MAX_INDEX_LINES = 200
 MAX_INDEX_BYTES = 25_000
 

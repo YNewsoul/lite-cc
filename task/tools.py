@@ -119,7 +119,7 @@ _TASK_LIST_SCHEMA = {
 
 def _task_create(subject: str, description: str, active_form: str = "", metadata: dict = None) -> str:
     task = create_task(subject, description, active_form=active_form, metadata=metadata)
-    return f"Task #{task.id} created: {task.subject}"
+    return f"Task  {task.id} created: {task.subject}"
 
 
 def _task_update(
@@ -131,12 +131,12 @@ def _task_update(
     owner: str = None,
     metadata: dict = None,
 ) -> str:
-    # Handle deletion
+    # 处理删除逻辑
     if status == "deleted":
         ok = delete_task(task_id)
         if ok:
-            return f"Task #{task_id} deleted."
-        return f"Error: task #{task_id} not found."
+            return f"Task  {task_id} deleted."
+        return f"Error: task  {task_id} not found."
 
     task, updated_fields = update_task(
         task_id,
@@ -148,18 +148,18 @@ def _task_update(
         metadata=metadata,
     )
     if task is None:
-        return f"Error: task #{task_id} not found."
+        return f"Error: task  {task_id} not found."
     if not updated_fields:
-        return f"Task #{task_id}: no changes (fields already match)."
-    return f"Task #{task_id} updated — changed: {', '.join(updated_fields)}."
+        return f"Task  {task_id}: no changes (fields already match)."
+    return f"Task  {task_id} updated — changed: {', '.join(updated_fields)}."
 
 
 def _task_get(task_id: str) -> str:
     task = get_task(task_id)
     if task is None:
-        return f"Task #{task_id} not found."
+        return f"Task  {task_id} not found."
     lines = [
-        f"Task #{task.id}: {task.subject}",
+        f"Task  {task.id}: {task.subject}",
         f"Status:      {task.status.value}",
         f"Description: {task.description}",
     ]

@@ -7,7 +7,7 @@ Code patterns, architecture, git history, and file structure are derivable
 
 MEMORY_TYPES = ["user", "feedback", "project", "reference"]
 
-# Condensed per-type guidance (used in system prompt injection)
+# 各类型的简明说明（用于注入 system prompt）
 MEMORY_TYPE_DESCRIPTIONS: dict[str, str] = {
     "user": (
         "Information about the user's role, goals, responsibilities, and knowledge. "
@@ -27,7 +27,7 @@ MEMORY_TYPE_DESCRIPTIONS: dict[str, str] = {
     ),
 }
 
-# What NOT to save (mirrors Claude Code source)
+# 明确哪些内容不应该保存（与 Claude Code 的约束保持一致）
 WHAT_NOT_TO_SAVE = """\
 ## What NOT to save in memory
 - Code patterns, conventions, architecture, file paths, or project structure — derivable from the codebase.
@@ -39,7 +39,7 @@ WHAT_NOT_TO_SAVE = """\
 These exclusions apply even when explicitly asked. If asked to save a PR list or activity summary,
 ask what was *surprising* or *non-obvious* — that is the part worth keeping."""
 
-# Memory format example (frontmatter)
+# 记忆文件格式示例（frontmatter）
 MEMORY_FORMAT_EXAMPLE = """\
 ```markdown
 ---
@@ -51,7 +51,7 @@ type: {{user | feedback | project | reference}}
 {{memory content — for feedback/project types: rule/fact, then **Why:** and **How to apply:** lines}}
 ```"""
 
-# Full guidance injected into the system prompt
+# 注入到 system prompt 中的完整说明
 MEMORY_SYSTEM_PROMPT = """\
 ## Memory system
 

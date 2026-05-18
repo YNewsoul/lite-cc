@@ -3,8 +3,10 @@ from __future__ import annotations
 
 from .loader import SkillDef, register_builtin_skill
 
-# ── /commit ────────────────────────────────────────────────────────────────
+# 这个文件只负责声明“随项目自带”的 skill 模板。
+# 它们本质上仍然是 prompt 模板，只是来源不是磁盘文件，而是代码内置。
 
+# /commit 对应的模板：指导模型检查 git 状态并生成合适的提交。
 _COMMIT_PROMPT = """\
 Review the current git state and create a well-structured commit.
 
@@ -31,6 +33,7 @@ Review the current git state and create a well-structured commit.
 User context: $ARGUMENTS
 """
 
+# /review 对应的模板：指导模型对本地 diff 或 PR 做结构化审查。
 _REVIEW_PROMPT = """\
 Review the code or pull request and provide structured feedback.
 
@@ -66,6 +69,8 @@ User context: $ARGUMENTS
 
 
 def _register_builtins() -> None:
+    # 这里直接构造 SkillDef 并注册到 loader 的内置列表中。
+    # 后续 load_skills() 会按“项目级 > 用户级 > 内置”的优先级统一返回。
     register_builtin_skill(SkillDef(
         name="commit",
         description="Review staged changes and create a well-structured git commit",
@@ -95,4 +100,5 @@ def _register_builtins() -> None:
     ))
 
 
+# 模块导入即注册，保持与 memory/tools.py、skill/tools.py 类似的“导入即生效”风格。
 _register_builtins()

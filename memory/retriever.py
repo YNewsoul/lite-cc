@@ -59,7 +59,7 @@ def scan_memory_headers(
         if fp.name == "MEMORY.md":
             continue
         try:
-            # Read only first 30 lines — fast, avoids loading large files
+            # 只读前 30 行，速度更快，也能避免加载大文件
             lines: list[str] = []
             with fp.open(encoding="utf-8", errors="replace") as fh:
                 for i, line in enumerate(fh):
@@ -86,7 +86,7 @@ def scan_all_memory_headers() -> list[dict]:
     """Scan both user and project memory dirs and return merged header list."""
     user_headers = scan_memory_headers(USER_MEMORY_DIR)
     proj_headers = scan_memory_headers(get_memory_dir("project"))
-    # Deduplicate by file_path (project entries take priority)
+    # 按 file_path 去重（项目级条目优先）
     seen: dict[str, dict] = {}
     for h in user_headers + proj_headers:
         seen[h["file_path"]] = h
@@ -121,10 +121,10 @@ def select_relevant_memories(
     if not headers:
         return []
     if not config:
-        # No config → just return the most recent entries
+        # 没有配置时，直接返回最近的若干条目
         return [h["file_path"] for h in headers[:max_results]]
 
-    # Build a numbered manifest for the model
+    # 为模型构造带编号的清单
     manifest_lines = [
         f"{i}: [{h['type']}] {h['name']} — {h['description']}"
         for i, h in enumerate(headers)
@@ -162,7 +162,7 @@ def select_relevant_memories(
         return [headers[i]["file_path"] for i in indices[:max_results]]
 
     except Exception:
-        # Fallback: return newest entries
+        # 兜底：返回最新的若干条目
         return [h["file_path"] for h in headers[:max_results]]
 
 

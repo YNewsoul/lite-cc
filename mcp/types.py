@@ -30,14 +30,14 @@ class MCPServerConfig:
     """
     name: str                                     # logical name in mcpServers dict
     transport: MCPTransport = MCPTransport.STDIO
-    # stdio fields
+    # 标准输入输出（stdio）模式字段
     command: str = ""
     args: List[str] = field(default_factory=list)
     env: Dict[str, str] = field(default_factory=dict)
-    # sse / http / ws fields
+    # sse / http / ws 连接模式字段
     url: str = ""
     headers: Dict[str, str] = field(default_factory=dict)
-    # optional
+    # 可选字段
     timeout: int = 30                             # seconds per request
     disabled: bool = False
 

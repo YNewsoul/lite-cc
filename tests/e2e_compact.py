@@ -66,7 +66,7 @@ def test_compact():
     print(f"  Split at index {split} out of {len(msgs)} messages")
     print("  PASS")
 
-    # ── Step 4: _restore_plan_context (not in plan mode) ──
+    # ── Step 4: _restore_plan_context（不在计划模式） ──
     print(f"\n{SEP}")
     print("STEP 4: _restore_plan_context — not in plan mode")
     print(SEP)
@@ -76,14 +76,14 @@ def test_compact():
     print("  Returns empty when not in plan mode")
     print("  PASS")
 
-    # ── Step 5: _restore_plan_context (in plan mode) ──
+    # ── Step 5: _restore_plan_context（处于计划模式） ──
     print(f"\n{SEP}")
     print("STEP 5: _restore_plan_context — in plan mode with plan file")
     print(SEP)
     import tempfile
     tmpdir = Path(tempfile.mkdtemp())
     plan_file = tmpdir / "plan.md"
-    plan_file.write_text("# Plan\n\n1. Do stuff\n2. More stuff\n", encoding="utf-8")
+    plan_file.write_text("  Plan\n\n1. Do stuff\n2. More stuff\n", encoding="utf-8")
     config = {"permission_mode": "auto", "_plan_mode_active": True, "_plan_file": str(plan_file)}
     result = _restore_plan_context(config)
     assert len(result) == 2
@@ -92,7 +92,7 @@ def test_compact():
     print(f"  Restored {len(result)} messages with plan content")
     print("  PASS")
 
-    # ── Step 6: _restore_plan_context (empty plan file) ──
+    # ── Step 6: _restore_plan_context（计划文件为空） ──
     print(f"\n{SEP}")
     print("STEP 6: _restore_plan_context — empty plan file")
     print(SEP)
@@ -104,7 +104,7 @@ def test_compact():
     print("  Returns empty for empty plan file")
     print("  PASS")
 
-    # ── Step 7: manual_compact — too few messages ──
+    # ── Step 7: manual_compact（消息过少） ──
     print(f"\n{SEP}")
     print("STEP 7: manual_compact — too few messages")
     print(SEP)
@@ -115,12 +115,12 @@ def test_compact():
     print(f"  {msg}")
     print("  PASS")
 
-    # ── Step 8: manual_compact — with mocked LLM ──
+    # ── Step 8: manual_compact（使用模拟 LLM） ──
     print(f"\n{SEP}")
     print("STEP 8: manual_compact — with mocked LLM summary")
     print(SEP)
 
-    # Build a large conversation
+    # 构造一段较大的对话历史
     big_msgs = []
     for i in range(30):
         big_msgs.append({"role": "user", "content": f"Question {i}: " + "x" * 200})
@@ -128,7 +128,7 @@ def test_compact():
     state = FakeState(messages=big_msgs)
     config = {"model": "test", "permission_mode": "auto"}
 
-    # Mock the LLM call in compact_messages
+    # 模拟 compact_messages 中的 LLM 调用
     import compaction
     import providers
 
@@ -145,14 +145,14 @@ def test_compact():
 
     assert success
     assert "Compacted" in msg
-    # Should have summary + ack + recent messages
+    # 结果中应包含摘要、确认消息和最近消息
     assert len(state.messages) < 60
     assert state.messages[0]["content"].startswith("[Previous conversation summary]")
     print(f"  {msg}")
     print(f"  Messages reduced from 60 to {len(state.messages)}")
     print("  PASS")
 
-    # ── Step 9: manual_compact with focus instructions ──
+    # ── Step 9: manual_compact（带 focus 指令） ──
     print(f"\n{SEP}")
     print("STEP 9: Verify focus instructions reach the prompt")
     print(SEP)
@@ -180,7 +180,7 @@ def test_compact():
     print(f"  Focus instruction was included in summarization prompt")
     print("  PASS")
 
-    # Cleanup
+    # 清理现场
     import shutil
     shutil.rmtree(str(tmpdir), ignore_errors=True)
 

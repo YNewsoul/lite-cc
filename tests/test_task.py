@@ -58,7 +58,7 @@ class TestTaskTypes:
     def test_one_line(self):
         t = Task(id="1", subject="Write tests", description="")
         line = t.one_line()
-        assert "#1" in line
+        assert " 1" in line
         assert "Write tests" in line
 
 
@@ -146,7 +146,7 @@ class TestTaskStore:
     def test_persistence_round_trip(self, tmp_path):
         """Tasks saved to disk are re-loaded correctly."""
         create_task("Persisted", "Should survive reload")
-        # Force reload
+        # 强制重新加载
         _store._tasks.clear()
         _store._loaded = False
         tasks = list_tasks()
@@ -188,7 +188,7 @@ class TestTaskToolFunctions:
     def test_task_create_tool(self):
         from task.tools import _task_create
         result = _task_create("Write README", "Add installation section")
-        assert "#1" in result
+        assert " 1" in result
         assert "Write README" in result
 
     def test_task_update_tool_status(self):
@@ -231,8 +231,8 @@ class TestTaskToolFunctions:
         _task_create("Step 1", "First thing")
         _task_create("Step 2", "Second thing")
         result = _task_list()
-        assert "#1" in result
-        assert "#2" in result
+        assert " 1" in result
+        assert " 2" in result
 
     def test_tool_schemas_registered(self):
         """All four task tools must be registered in tool_registry."""

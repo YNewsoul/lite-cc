@@ -38,7 +38,7 @@ def redirect_memory_dirs(tmp_path, monkeypatch):
 
     monkeypatch.setattr(_store, "USER_MEMORY_DIR", user_mem)
 
-    # Patch get_project_memory_dir to return our tmp project dir
+    # patch get_project_memory_dir，使其返回当前测试使用的临时项目目录
     monkeypatch.setattr(_store, "get_project_memory_dir", lambda: proj_mem)
 
 
@@ -178,7 +178,7 @@ class TestTruncation:
         assert "lines" in result or "行" in result
 
     def test_byte_truncation(self):
-        # 25001 bytes of content
+        # 25001 字节内容
         text = "x" * 25001
         result = truncate_index_content(text)
         assert "WARNING" in result or "警告" in result

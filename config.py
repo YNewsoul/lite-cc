@@ -10,12 +10,12 @@ SESSIONS_DIR      = CONFIG_DIR  / "sessions"
 DAILY_DIR         = SESSIONS_DIR / "daily"       # daily/YYYY-MM-DD/session_*.json
 SESSION_HIST_FILE = SESSIONS_DIR / "history.json" # master: all sessions ever
 
-# kept for backward-compat (/resume still reads from here)
+# 为兼容旧版本而保留（/resume 仍会从这里读取）
 MR_SESSION_DIR = SESSIONS_DIR / "mr_sessions"
 
 DEFAULTS = {
-    "model":            "deepseek/deepseek-v4-pro",
-    "subagent_model":   "deepseek/deepseek-v4-flash",  # lightweight model for memory ops
+    "model":            "zhipu/glm-4",
+    "subagent_model":   "zhipu/glm-4-flash",  # lightweight model for memory ops
     "max_tokens":       40000,
     "permission_mode":  "auto",   # auto | accept-all | manual  (plan mode is a separate runtime overlay)
     "verbose":          False,
@@ -27,14 +27,14 @@ DEFAULTS = {
     "max_concurrent_agents": 3,
     "session_daily_limit":   10,    # max sessions kept per day in daily/
     "session_history_limit": 200,  # max sessions kept in history.json
-    # Per-provider API keys (optional; env vars take priority)
-    # "anthropic_api_key": "sk-ant-..."
-    # "openai_api_key":    "sk-..."
-    # "gemini_api_key":    "..."
-    # "kimi_api_key":      "..."
-    # "qwen_api_key":      "..."
-    # "zhipu_api_key":     "..."
-    # "deepseek_api_key":  "..."
+    # 按提供商划分的 API Key（可选；环境变量优先）
+    "anthropic_api_key": "sk-ant-...",
+    "openai_api_key":    "..",
+    "gemini_api_key":    "...",
+    "kimi_api_key":      "...",
+    "qwen_api_key":      "...",
+    "zhipu_api_key":     "a1047eca23af45e4ac65ae7cdefbdf00.oEViOZgqksk2OvuC",
+    "deepseek_api_key":  "..."
 }
 
 
@@ -47,14 +47,14 @@ def load_config() -> dict:
             cfg.update(json.loads(CONFIG_FILE.read_text()))
         except Exception:
             pass
-    # Backward-compat: legacy single api_key → anthropic_api_key
+    # 向后兼容：旧版单一 api_key 映射到 anthropic_api_key
     if cfg.get("api_key") and not cfg.get("anthropic_api_key"):
         cfg["anthropic_api_key"] = cfg.pop("api_key")
-    # Backward-compat: old configs may have permission_mode == "plan"
-    # Plan mode is now an independent runtime overlay; downgrade silently.
+    # 向后兼容：旧配置里可能仍有 permission_mode == "plan"
+    # 计划模式现在是独立的运行时叠加层，这里静默降级处理。
     if cfg.get("permission_mode") == "plan":
         cfg["permission_mode"] = "auto"
-    # Also accept ANTHROPIC_API_KEY env for backward-compat
+    # 同时接受 ANTHROPIC_API_KEY 环境变量，以兼容旧版本
     if not cfg.get("anthropic_api_key"):
         cfg["anthropic_api_key"] = os.environ.get("ANTHROPIC_API_KEY", "")
     return cfg
@@ -62,7 +62,7 @@ def load_config() -> dict:
 
 def save_config(cfg: dict):
     CONFIG_DIR.mkdir(exist_ok=True)
-    # Strip internal runtime keys (e.g. _run_query_callback) before saving
+    # 保存前移除内部运行时字段（例如 _run_query_callback）
     data = {k: v for k, v in cfg.items() if not k.startswith("_")}
     CONFIG_FILE.write_text(json.dumps(data, indent=2))
 

@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 from dataclasses import dataclass, field
 
-# Ensure project root is on path
+# 确保项目根目录已经加入导入路径
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 SEP = "=" * 60
@@ -134,7 +134,7 @@ def test_plan_mode():
     config.pop("_plan_prev_permission_mode", None)
 
     assert config["permission_mode"] == "auto", "permission_mode should still be 'auto'"
-    # Now writes go back to needing permission (return False in auto mode)
+    # 退出后写操作应重新回到需要权限确认的状态（auto 模式下返回 False）
     assert _check_permission(write_tc, config) == False, "Should be back to auto mode behaviour"
     assert _check_permission(read_tc, config) == True, "Reads still auto-approved"
     print("  PASS")
@@ -155,7 +155,7 @@ def test_plan_mode():
     print("STEP 10: System prompt injection")
     print(SEP)
 
-    # Re-enter plan mode for this test
+    # 为这个测试重新进入计划模式
     config["_plan_mode_active"] = True
     config["_plan_file"] = str(plan_path)
 
@@ -165,7 +165,7 @@ def test_plan_mode():
     assert str(plan_path) in prompt, "System prompt should reference plan file path"
     assert "计划文件" in prompt, "System prompt should reference plan file"
 
-    # Without plan mode
+    # 不启用计划模式时
     config["_plan_mode_active"] = False
     prompt_normal = build_system_prompt(config)
     assert "计划限制层当前处于激活状态" not in prompt_normal, \

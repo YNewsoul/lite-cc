@@ -50,7 +50,7 @@ def skill_dir(tmp_path, monkeypatch):
     (skills_dir / "review.md").write_text(REVIEW_MD, encoding="utf-8")
 
     monkeypatch.setattr(_loader, "_get_skill_paths", lambda: [skills_dir])
-    # Also patch the builtin list to be empty so tests are predictable
+    # 同时把 builtin 列表 patch 为空，保证测试结果可预测
     monkeypatch.setattr(_loader, "_BUILTIN_SKILLS", [])
     return skills_dir
 
@@ -129,7 +129,7 @@ def test_parse_skill_file_allowed_tools(tmp_path):
 
 
 # ------------------------------------------------------------------
-# load_skills
+# load_skills 相关测试
 # ------------------------------------------------------------------
 
 def test_load_skills(skill_dir):
@@ -166,7 +166,7 @@ def test_load_skills_project_overrides_builtin(tmp_path, monkeypatch):
     """A project skill with the same name overrides the builtin."""
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir()
-    # project-level "commit" with different description
+    # 项目级的 "commit" skill 使用不同的描述以覆盖默认值
     (skills_dir / "commit.md").write_text(
         "---\nname: commit\ndescription: OVERRIDDEN\n---\ncustom commit prompt\n"
     )
@@ -177,7 +177,7 @@ def test_load_skills_project_overrides_builtin(tmp_path, monkeypatch):
 
 
 # ------------------------------------------------------------------
-# find_skill
+# find_skill 相关测试
 # ------------------------------------------------------------------
 
 def test_find_skill_commit(skill_dir):
@@ -204,7 +204,7 @@ def test_find_skill_nonexistent(skill_dir):
 
 
 # ------------------------------------------------------------------
-# substitute_arguments
+# substitute_arguments 相关测试
 # ------------------------------------------------------------------
 
 def test_substitute_arguments_placeholder():
@@ -218,14 +218,14 @@ def test_substitute_named_args(tmp_path):
         "1.0 staging",
         ["env", "version"],
     )
-    # arg_names are positional: env=1.0, version=staging
+    # arg_names 按位置匹配：env=1.0，version=staging
     assert "$VERSION" not in result
     assert "$ENV" not in result
     assert "$ARGUMENTS" not in result
 
 
 def test_substitute_missing_arg():
-    # If user provides fewer args than named slots, missing ones become ""
+    # 如果用户提供的参数少于命名槽位数量，缺失部分应替换为空字符串
     result = substitute_arguments("Hello $NAME!", "", ["name"])
     assert result == "Hello !"
 

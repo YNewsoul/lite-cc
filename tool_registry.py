@@ -1,7 +1,7 @@
-"""Tool plugin registry for pycc.
+"""pycc 的工具插件注册中心。
 
-Provides a central registry for tool definitions, lookup, schema export,
-and dispatch with large-result disk offloading.
+提供统一的工具定义注册、查找、schema 导出，
+以及带大结果落盘能力的分发执行。
 """
 from __future__ import annotations
 
@@ -14,14 +14,14 @@ from typing import Any, Callable, Dict, List, Optional
 
 @dataclass
 class ToolDef:
-    """Definition of a single tool plugin.
+    """单个工具插件的定义。
 
-    Attributes:
-        name: unique tool identifier
-        schema: JSON-schema dict sent to the API (name, description, input_schema)
-        func: callable(params: dict, config: dict) -> str
-        read_only: True if the tool never mutates state
-        concurrent_safe: True if safe to run in parallel with other tools
+    字段说明：
+        name: 工具的唯一标识符
+        schema: 发给模型 API 的 JSON Schema（name、description、input_schema）
+        func: 可调用对象，签名为 callable(params: dict, config: dict) -> str
+        read_only: 若为 True，表示该工具不会修改状态
+        concurrent_safe: 若为 True，表示可与其他工具并行安全执行
     """
     name: str
     schema: Dict[str, Any]
@@ -30,42 +30,42 @@ class ToolDef:
     concurrent_safe: bool = False
 
 
-# ── Constants ─────────────────────────────────────────────────────────────
+# ── 常量 ───────────────────────────────────────────────────────────────────
 
-# Results larger than this are offloaded to disk instead of truncated
-DISK_OFFLOAD_THRESHOLD = 50_000   # ~50 KB in characters
+# 超过这个阈值的结果会落盘保存，而不是直接在上下文里截断。
+DISK_OFFLOAD_THRESHOLD = 50_000   # 按字符数估算，约 50 KB
 
-# How many chars of a large result to keep in-context as a preview
+# 对于超大结果，在上下文中最多保留这么多字符作为预览。
 PREVIEW_SIZE = 2_048
 
-# Tools whose file_path input is logged in _file_access_log
+# 这些工具的 file_path 输入会记录到 _file_access_log 中。
 _FILE_LOG_TOOLS = {"Read", "Write", "Edit"}
 
 
-# ── Internal state ─────────────────────────────────────────────────────────
+# ── 内部状态 ───────────────────────────────────────────────────────────────
 
 _registry: Dict[str, ToolDef] = {}
 
 
-# ── Public API ─────────────────────────────────────────────────────────────
+# ── 对外 API ───────────────────────────────────────────────────────────────
 
 def register_tool(tool_def: ToolDef) -> None:
-    """Register a tool, overwriting any existing tool with the same name."""
+    """注册一个工具；若同名工具已存在则直接覆盖。"""
     _registry[tool_def.name] = tool_def
 
 
 def get_tool(name: str) -> Optional[ToolDef]:
-    """Look up a tool by name. Returns None if not found."""
+    """按名称查找工具；若不存在则返回 None。"""
     return _registry.get(name)
 
 
 def get_all_tools() -> List[ToolDef]:
-    """Return all registered tools (insertion order)."""
+    """返回当前所有已注册工具，保持注册顺序。"""
     return list(_registry.values())
 
 
 def get_tool_schemas() -> List[Dict[str, Any]]:
-    """Return the schemas of all registered tools (for API tool parameter)."""
+    """返回所有已注册工具的 schema，供模型 API 的 tools 参数使用。"""
     return [t.schema for t in _registry.values()]
 
 
@@ -76,21 +76,21 @@ def execute_tool(
     max_output: int = 32000,
     tool_use_id: Optional[str] = None,
 ) -> str:
-    """Dispatch a tool call by name.
+    """按名称分发并执行一次工具调用。
 
-    Large results (> DISK_OFFLOAD_THRESHOLD chars) are written to disk and
-    replaced with a short in-context preview. This avoids hard truncation
-    while keeping the context window manageable.
+    对于超大结果（长度大于 DISK_OFFLOAD_THRESHOLD），会优先写入磁盘，
+    然后只在上下文里保留一小段预览文本。这样可以避免硬截断，
+    同时把上下文窗口占用控制在可接受范围内。
 
-    Args:
-        name:        tool name
-        params:      tool input parameters dict
-        config:      runtime configuration dict
-        max_output:  fallback hard-cap (chars) used only when disk offload fails
-        tool_use_id: optional unique ID for naming the offloaded file
+    参数：
+        name:        工具名称
+        params:      工具输入参数字典
+        config:      运行时配置字典
+        max_output:  仅在落盘失败时使用的兜底最大输出长度（字符数）
+        tool_use_id: 可选的唯一 ID，用于命名落盘文件
 
-    Returns:
-        Tool result string (possibly replaced with a disk-offload preview).
+    返回：
+        工具执行结果字符串；若发生大结果落盘，则返回替换后的预览文本。
     """
     tool = get_tool(name)
     if tool is None:
@@ -104,10 +104,10 @@ def execute_tool(
     if not isinstance(result, str):
         result = str(result)
 
-    # ── Update file access log ──────────────────────────────────────────
+    # ── 更新文件访问日志 ───────────────────────────────────────────────────
     _update_file_access_log(name, params, config)
 
-    # ── Large-result disk offload ───────────────────────────────────────
+    # ── 超大结果落盘 ───────────────────────────────────────────────────────
     if len(result) > DISK_OFFLOAD_THRESHOLD:
         offload_path = _offload_result_to_disk(result, config, tool_use_id)
         if offload_path:
@@ -119,7 +119,7 @@ def execute_tool(
                 f"use Read tool to access it if needed ...]"
             )
         else:
-            # Disk offload failed — fall back to soft truncation
+            # 落盘失败时，退回到软截断策略。
             if len(result) > max_output:
                 first_half = max_output // 2
                 last_quarter = max_output // 4
@@ -134,18 +134,18 @@ def execute_tool(
 
 
 def clear_registry() -> None:
-    """Remove all registered tools. Intended for testing."""
+    """清空所有已注册工具，主要用于测试场景。"""
     _registry.clear()
 
 
-# ── Disk offload helpers ───────────────────────────────────────────────────
+# ── 落盘辅助函数 ───────────────────────────────────────────────────────────
 
 def _offload_result_to_disk(
     result: str,
     config: Dict[str, Any],
     tool_use_id: Optional[str] = None,
 ) -> Optional[str]:
-    """Write result to disk and return the path, or None on error."""
+    """把结果写入磁盘并返回文件路径；失败时返回 None。"""
     try:
         session_id = config.get("_session_id", "default")
         tid = tool_use_id or _uuid.uuid4().hex[:12]
@@ -163,7 +163,7 @@ def _update_file_access_log(
     params: Dict[str, Any],
     config: Dict[str, Any],
 ) -> None:
-    """Record file access time in config['_file_access_log'] for file tools."""
+    """为文件类工具记录访问时间到 config['_file_access_log'] 中。"""
     if name not in _FILE_LOG_TOOLS:
         return
     file_path = params.get("file_path") or params.get("notebook_path", "")

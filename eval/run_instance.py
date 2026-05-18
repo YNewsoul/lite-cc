@@ -50,7 +50,7 @@ def clone_repo(repo: str, base_commit: str, dest: Path, timeout: int = 180) -> N
 
     rc, out = _run(["git", "fetch", "--depth=50", "origin", base_commit],
                    cwd=str(dest), timeout=120)
-    # fetch may fail if commit is already present — that's fine
+    # 如果对应 commit 已存在，fetch 失败也没关系
     rc, out = _run(["git", "checkout", base_commit], cwd=str(dest), timeout=60)
     if rc != 0:
         raise RuntimeError(f"git checkout {base_commit} failed: {out}")
@@ -65,7 +65,7 @@ def run_pycc(problem_statement: str, repo_dir: Path, model: str,
     """
     prompt = _build_prompt(problem_statement)
 
-    # Always use source pycc.py to avoid stale installed binaries
+    # 始终使用源码里的 pycc.py，避免误用过期的已安装二进制
     pycc_root = Path(__file__).resolve().parent.parent
     cmd = [sys.executable, str(pycc_root / "pycc.py"),
            "--print", "--accept-all", "--model", model, prompt]

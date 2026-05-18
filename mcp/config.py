@@ -48,10 +48,10 @@ def _load_file(path: Path) -> Dict[str, dict]:
 
 def load_mcp_configs() -> Dict[str, MCPServerConfig]:
     """Return all MCP server configs, project-level overriding user-level."""
-    # User-level first (lowest priority)
+    # 先读取用户级配置（优先级最低）
     servers: Dict[str, dict] = _load_file(USER_MCP_CONFIG)
 
-    # Walk up from cwd to find .mcp.json (up to 10 levels)
+    # 从当前目录逐级向上查找 .mcp.json，最多查 10 层
     p = Path.cwd()
     for _ in range(10):
         candidate = p / PROJECT_MCP_NAME

@@ -1872,6 +1872,7 @@ def repl(config: dict, initial_prompt: str = None):
             verbose = config.get("verbose", False)
 
             # 后台记忆检索（与 API 调用并行执行）
+            # 检索结果不是给当前查询，而是给后续查询
             _mem_result: dict = {"content": ""}
 
             def _memory_retrieval_worker() -> None:
@@ -1891,13 +1892,13 @@ def repl(config: dict, initial_prompt: str = None):
 
             print(clr("\n╭─ pycc ", "dim") + clr("●", "green") + clr(" ─────────────────────────", "dim"))
 
-            thinking_started = False
-            spinner_shown = True
-            _start_tool_spinner()
-            _pre_tool_text = []
-            _post_tool = False
-            _post_tool_buf = []
-            _duplicate_suppressed = False
+            thinking_started = False # 当前是否正在显示 thinking 流
+            spinner_shown = True # 当前是否正在显示加载动画
+            _start_tool_spinner() # 初始加载动画
+            _pre_tool_text = [] # 工具调用前已经输出的正文
+            _post_tool = False # 是否已经发生过工具调用
+            _post_tool_buf = [] # 工具调用后新的文本缓存（用于去重）
+            _duplicate_suppressed = False # 是否已经进入“去重模式”
 
             try:
                 for event in run(user_input, state, config, system_prompt):
@@ -1911,11 +1912,14 @@ def repl(config: dict, initial_prompt: str = None):
                                 print(clr("│ ", "dim"), end="", flush=True)
 
                     if isinstance(event, TextChunk):
+                        # 处理普通文本输出
                         if thinking_started:
+                            # 如果之前在显示 thinking，先结束 thinking 显示
                             print("\033[0m\n")
                             thinking_started = False
 
                         if _post_tool and not _duplicate_suppressed:
+                            # 如果之前已经发生过工具调用，且当前不是去重模式
                             _post_tool_buf.append(event.text)
                             post_so_far = "".join(_post_tool_buf).strip()
                             pre_text = "".join(_pre_tool_text).strip()
@@ -2262,6 +2266,7 @@ def main():
         err("--print 需要指定提示词参数")
         sys.exit(1)
 
+    # 交互模式
     repl(config, initial_prompt=initial)
 
 

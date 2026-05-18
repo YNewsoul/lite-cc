@@ -62,7 +62,7 @@ class StdioTransport:
                 msg = json.loads(line)
             except Exception:
                 continue
-            # Dispatch: response (has "id") vs notification (no "id")
+            # 分发处理：有 "id" 的是响应，没有 "id" 的是通知
             msg_id = msg.get("id")
             if msg_id is not None and msg_id in self._pending:
                 holder = self._pending[msg_id]
@@ -166,7 +166,7 @@ class HttpTransport:
         if self._config.transport == MCPTransport.SSE:
             self._start_sse()
         else:
-            # Pure HTTP: no persistent connection needed
+            # 纯 HTTP 模式：不需要持久连接
             self._session_url = self._config.url
 
     def _start_sse(self) -> None:
@@ -175,7 +175,7 @@ class HttpTransport:
         client = self._get_client()
         self._running = True
 
-        # Initial SSE connect — first event should be 'endpoint' with session URL
+        # 初始化 SSE 连接：首个事件应为携带会话 URL 的 endpoint
         endpoint_event = threading.Event()
         endpoint_holder: dict = {"url": None, "error": None}
 
@@ -192,7 +192,7 @@ class HttpTransport:
                         elif line.startswith("data:"):
                             data = line[5:].strip()
                             if event_type == "endpoint":
-                                # Session URL may be relative or absolute
+                                # 会话 URL 可能是相对路径，也可能是绝对路径
                                 base = self._config.url.rsplit("/sse", 1)[0]
                                 session_url = data if data.startswith("http") else base + data
                                 endpoint_holder["url"] = session_url
@@ -230,7 +230,7 @@ class HttpTransport:
         wait_secs = timeout or self._config.timeout
 
         if self._config.transport == MCPTransport.SSE:
-            # For SSE: POST to session URL, wait for response on SSE stream
+            # 在 SSE 模式下：向会话 URL 发送 POST，并在 SSE 流中等待响应
             event = threading.Event()
             holder: dict = {"event": event, "result": None}
             self._sse_pending[req_id] = holder
@@ -239,7 +239,7 @@ class HttpTransport:
             self._sse_pending.pop(req_id, None)
             result = holder["result"]
         else:
-            # For HTTP: POST and get response directly
+            # 在 HTTP 模式下：直接 POST 并同步获取响应
             resp = client.post(self._session_url or self._config.url, json=msg, timeout=wait_secs)
             resp.raise_for_status()
             result = resp.json()
@@ -363,14 +363,14 @@ class MCPClient:
     def _parse_tool(self, raw: dict) -> MCPTool:
         tool_name = raw.get("name", "")
         qualified = f"mcp__{self.config.name}__{tool_name}"
-        # Sanitize: replace non-alphanumeric with _ for API compatibility
+        # 做名称清洗：将非字母数字字符替换为 _，以兼容 API
         qualified = "".join(c if c.isalnum() or c == "_" else "_" for c in qualified)
 
         annotations = raw.get("annotations", {})
         read_only = bool(annotations.get("readOnlyHint", False))
 
         schema = raw.get("inputSchema", {"type": "object", "properties": {}})
-        # Ensure minimum valid JSON schema
+        # 确保至少生成一个合法的最小 JSON Schema
         if not isinstance(schema, dict):
             schema = {"type": "object", "properties": {}}
 
@@ -399,7 +399,7 @@ class MCPClient:
         is_error = result.get("isError", False)
         content = result.get("content", [])
 
-        # Collect text content blocks
+        # 收集文本内容块
         parts: List[str] = []
         for block in content:
             btype = block.get("type", "")
@@ -492,7 +492,7 @@ class MCPManager:
 
     def call_tool(self, qualified_name: str, arguments: dict) -> str:
         """Dispatch a tool call by qualified name (mcp__server__tool)."""
-        # Parse server and tool name from qualified name
+        # 从限定名中解析 server 和 tool 名称
         parts = qualified_name.split("__", 2)
         if len(parts) != 3 or parts[0] != "mcp":
             raise ValueError(f"Invalid MCP tool name: {qualified_name}")
@@ -503,12 +503,12 @@ class MCPManager:
         if client is None:
             raise RuntimeError(f"MCP server '{server_name}' not configured")
 
-        # Auto-reconnect if dropped
+        # 连接断开时自动重连
         if not client.alive:
             client.reconnect()
             client.list_tools()
 
-        # Find the original tool name (un-sanitized)
+        # 找回原始工具名（未经清洗的名称）
         original_name = tool_name
         for t in client._tools:
             if t.qualified_name == qualified_name:

@@ -12,8 +12,8 @@ from .types import Task, TaskStatus
 
 _lock = threading.Lock()
 
-# Tasks are keyed by ID, stored per session in <cwd>/.pycc/tasks.json
-# The store is kept in memory; we reload from disk on first access.
+# 任务以 ID 为键，按会话保存在 <cwd>/.pycc/tasks.json 中
+# 存储默认常驻内存，首次访问时再从磁盘重新加载
 
 _tasks: dict[str, Task] = {}
 _loaded = False

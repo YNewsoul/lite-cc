@@ -5,6 +5,9 @@ from tool_registry import ToolDef, register_tool
 from .loader import find_skill, load_skills, substitute_arguments
 
 
+# 这个文件把 skill 系统暴露成两个普通工具：
+# 1. Skill     —— 按名称执行某个 skill
+# 2. SkillList —— 列出当前可用 skill
 _SKILL_SCHEMA = {
     "name": "Skill",
     "description": (
@@ -44,7 +47,8 @@ def _skill_tool(params: dict, config: dict) -> str:
     skill_name = params.get("name", "").strip()
     args = params.get("args", "")
 
-    # Look up by name first, then by trigger
+    # 优先按正式名称查找；如果没找到，再按 trigger 匹配。
+    # 这样模型既可以传 "review"，也可以传 "/review"。
     skill = None
     for s in load_skills():
         if s.name == skill_name:
@@ -56,14 +60,17 @@ def _skill_tool(params: dict, config: dict) -> str:
         names = [s.name for s in load_skills()]
         return f"Error: skill '{skill_name}' not found. Available: {', '.join(names)}"
 
+    # skill 的核心就是提示模板渲染。
+    # 渲染后会包装成一条新的消息，再交给嵌套 agent 执行。
     rendered = substitute_arguments(skill.prompt, args, skill.arguments)
     message = f"[Skill: {skill.name}]\n\n{rendered}"
 
-    # Run inline via agent and collect text output
+    # 这里不是直接调用 execute_skill()，而是手动走一次嵌套 agent.run()，
+    # 并把输出文本收集成“工具结果”返回给外层 agent。
     import agent as _agent
     system_prompt = config.get("_system_prompt", "")
 
-    # Collect output text
+    # 使用独立的 sub_state，避免把 skill 内部执行过程直接并入外层会话历史。
     output_parts: list[str] = []
     sub_state = _agent.AgentState()
     sub_config = {**config, "_depth": config.get("_depth", 0) + 1}
@@ -78,6 +85,8 @@ def _skill_tool(params: dict, config: dict) -> str:
 
 
 def _skill_list_tool(params: dict, config: dict) -> str:
+    # SkillList 的输出同时面向模型和人类：
+    # 既能帮助模型决定要不要调用某个 skill，也能用于 /skills 命令展示。
     skills = load_skills()
     if not skills:
         return "No skills available."
@@ -91,6 +100,8 @@ def _skill_list_tool(params: dict, config: dict) -> str:
 
 
 def _register() -> None:
+    # 仍然复用统一的工具注册中心，让 skill 与 Read / Edit / MemorySave
+    # 这些工具在模型看来是同一套能力系统的一部分。
     register_tool(ToolDef(
         name="Skill",
         schema=_SKILL_SCHEMA,
@@ -107,4 +118,5 @@ def _register() -> None:
     ))
 
 
+# 模块导入即注册。
 _register()

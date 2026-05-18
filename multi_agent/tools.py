@@ -47,12 +47,12 @@ def _agent_tool(params: dict, config: dict) -> str:
     system_prompt = config.get("_system_prompt", "You are a helpful assistant.")
     depth = config.get("_depth", 0)
 
-    # Strip private keys before passing to sub-agent
+    # 传给子智能体前，先去掉私有配置字段
     eff_config = {k: v for k, v in config.items() if not k.startswith("_")}
     if model_override:
         eff_config["model"] = model_override
 
-    # Resolve agent definition
+    # 解析目标 agent 定义
     agent_def = None
     if subagent_type:
         agent_def = get_agent_definition(subagent_type)

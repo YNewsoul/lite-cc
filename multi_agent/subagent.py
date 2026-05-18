@@ -121,7 +121,7 @@ def _parse_agent_md(path: Path, source: str = "user") -> AgentDefinition:
                 import yaml as _yaml
                 fm = _yaml.safe_load(fm_text) or {}
             except ImportError:
-                # Manual key: value parse (no yaml dependency required)
+                # 手动解析 key: value，避免额外依赖 yaml
                 fm: dict = {}
                 for line in fm_text.splitlines():
                     if ":" in line:
@@ -133,7 +133,7 @@ def _parse_agent_md(path: Path, source: str = "user") -> AgentDefinition:
             if isinstance(raw_tools, list):
                 tools = [str(t) for t in raw_tools]
             elif isinstance(raw_tools, str):
-                # Handle "[Read, Write]" or "Read, Write" format
+                # 兼容 "[Read, Write]" 或 "Read, Write" 这两种格式
                 s = raw_tools.strip("[]")
                 tools = [t.strip() for t in s.split(",") if t.strip()]
 
@@ -156,7 +156,7 @@ def load_agent_definitions() -> Dict[str, AgentDefinition]:
     """
     defs: Dict[str, AgentDefinition] = dict(_BUILTIN_AGENTS)
 
-    # User-level
+    # 用户级定义
     user_dir = Path.home() / ".pycc" / "agents"
     if user_dir.is_dir():
         for p in sorted(user_dir.glob("*.md")):
@@ -166,7 +166,7 @@ def load_agent_definitions() -> Dict[str, AgentDefinition]:
             except Exception:
                 pass
 
-    # Project-level (overrides user)
+    # 项目级定义（可覆盖用户级）
     proj_dir = Path.cwd() / ".pycc" / "agents"
     if proj_dir.is_dir():
         for p in sorted(proj_dir.glob("*.md")):
@@ -225,7 +225,7 @@ def _create_worktree(base_dir: str) -> tuple:
         subprocess.CalledProcessError or OSError on failure.
     """
     branch = f"nano-agent-{uuid.uuid4().hex[:8]}"
-    # mkdtemp gives us a path; remove the empty dir so git can create it
+    # mkdtemp 先创建了一个空目录，这里删除它，让 git 自己创建 worktree 目录
     wt_path = tempfile.mkdtemp(prefix="nano-agent-wt-")
     os.rmdir(wt_path)
     subprocess.run(
@@ -321,7 +321,7 @@ class SubAgentManager:
             task.result = f"Max depth ({self.max_depth}) exceeded"
             return task
 
-        # Build effective config and system prompt for this sub-agent
+        # 为当前子智能体构建最终生效的配置和系统提示词
         eff_config = dict(config)
         eff_system = system_prompt
 
@@ -335,7 +335,7 @@ class SubAgentManager:
             if agent_def.system_prompt:
                 eff_system = agent_def.system_prompt.rstrip() + "\n\n" + system_prompt
 
-        # Handle worktree isolation
+        # 处理 worktree 隔离逻辑
         worktree_path = ""
         worktree_branch = ""
         base_dir = os.getcwd()
@@ -387,7 +387,7 @@ class SubAgentManager:
                     task.result = _extract_final_text(state.messages)
                     task.status = "completed"
 
-                # Drain inbox: process any messages sent via SendMessage
+                # 清空收件箱：处理通过 SendMessage 发来的消息
                 while not task._inbox.empty() and not task._cancel_flag:
                     inbox_msg = task._inbox.get_nowait()
                     task.status = "running"
@@ -452,7 +452,7 @@ class SubAgentManager:
         Returns:
             True if the message was queued, False if task not found or already done.
         """
-        # Resolve name → task_id
+        # 将名称解析为 task_id
         task_id = self._by_name.get(task_id_or_name, task_id_or_name)
         task = self.tasks.get(task_id)
         if task is None:

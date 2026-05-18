@@ -17,13 +17,13 @@ def _make_mock_agent_run(sleep_per_iter=0.05, iters=3):
             if cancel_check and cancel_check():
                 return
             time.sleep(sleep_per_iter)
-        # Append an assistant message to state
+        # 向 state 中追加一条 assistant 消息
         state.messages.append({
             "role": "assistant",
             "content": f"Result for: {prompt}",
             "tool_calls": [],
         })
-        # Yield a TurnDone-like event (generator protocol)
+        # 按生成器协议产出一个类似 TurnDone 的事件
         yield None
 
     return mock_agent_run
@@ -66,7 +66,7 @@ class TestSpawnAndWait:
 
     def test_spawn_returns_immediately(self, manager):
         task = manager.spawn("hello", {}, "system")
-        # Task should be pending or running, not yet completed
+        # 任务此时应处于 pending 或 running，而不是已完成
         assert task.status in ("pending", "running")
 
 
@@ -84,12 +84,12 @@ class TestListTasks:
 class TestCancel:
     def test_cancel_running_task(self, slow_manager):
         task = slow_manager.spawn("slow task", {}, "system")
-        # Wait briefly to ensure the task starts running
+        # 短暂等待，确保任务已经开始运行
         time.sleep(0.1)
         assert task.status == "running"
         success = slow_manager.cancel(task.id)
         assert success is True
-        # Wait for the task to actually finish
+        # 等待任务真正执行完成
         slow_manager.wait(task.id, timeout=5)
         assert task.status == "cancelled"
 

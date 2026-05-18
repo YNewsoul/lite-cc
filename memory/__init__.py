@@ -66,7 +66,7 @@ from .dream import (  # noqa: F401
     maybe_run_dream,
 )
 __all__ = [
-    # store
+    # 存储相关
     "MemoryEntry",
     "save_memory",
     "delete_memory",
@@ -79,7 +79,7 @@ __all__ = [
     "INDEX_FILENAME",
     "MAX_INDEX_LINES",
     "MAX_INDEX_BYTES",
-    # scan
+    # 扫描相关
     "MemoryHeader",
     "scan_memory_dir",
     "scan_all_memories",
@@ -87,25 +87,25 @@ __all__ = [
     "memory_age_days",
     "memory_age_str",
     "memory_freshness_text",
-    # context
+    # 上下文注入相关
     "get_memory_context",
     "find_relevant_memories",
     "truncate_index_content",
-    # types
+    # 类型与约束说明
     "MEMORY_TYPES",
     "MEMORY_TYPE_DESCRIPTIONS",
     "MEMORY_SYSTEM_PROMPT",
     "WHAT_NOT_TO_SAVE",
-    # retriever
+    # 检索相关
     "retrieve_for_query",
     "scan_memory_headers",
     "scan_all_memory_headers",
     "select_relevant_memories",
     "load_selected_memories",
     "memory_freshness_warning",
-    # auto_extractor (Layer 2)
+    # 自动提取（第 2 层）
     "maybe_extract_memories",
-    # dream (Layer 3)
+    # 梦境整合（第 3 层）
     "consolidate",
     "increment_session_count",
     "maybe_run_dream",

@@ -4,7 +4,7 @@ from __future__ import annotations
 import sys
 import os
 
-# Ensure project root is on sys.path
+# 确保项目根目录已经加入 sys.path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from compaction import estimate_tokens, get_context_limit, snip_old_messages, find_split_point
@@ -61,7 +61,7 @@ class TestEstimateTokens:
             },
         ]
         result = estimate_tokens(msgs)
-        # content "ok" (2) + tool_calls string values: "c1" (2) + "Bash" (4) = 8
+        # content 中的 "ok"（2）+ tool_calls 里的字符串值 "c1"（2）+ "Bash"（4）= 8
         assert result == int(8 / 3.5)
 
 
@@ -85,7 +85,7 @@ class TestGetContextLimit:
         assert get_context_limit("qwen-max") == 1000000
 
     def test_unknown_model_fallback(self):
-        # Unknown models fall back to openai provider which has 128000
+        # 未知模型会回退到 openai provider，对应上下文窗口为 128000
         assert get_context_limit("some-random-model-xyz") == 128000
 
 
@@ -110,10 +110,10 @@ class TestSnipOldMessages:
         original_len = len(msgs)
         freed = snip_old_messages(msgs, preserve_last_n_turns=4)
         # 4 turns removed; replaced by 2 boundary messages (boundary + ack)
-        # original: 8 turns * 3 msgs each = 24; keeping 4 = 12; boundary adds 2
+        # 原始共有 8 轮，每轮 3 条消息共 24 条；保留 4 轮即 12 条；边界提示再加 2 条
         assert len(msgs) < original_len
         assert freed > 0
-        # Boundary marker should appear at the removed position
+        # 边界标记应出现在被移除消息的位置
         assert any("Earlier conversation history has been removed" in m.get("content", "") for m in msgs)
 
     def test_within_limit_nothing_removed(self):
@@ -143,7 +143,7 @@ class TestSnipOldMessages:
         """The last preserve_last_n_turns turns should still exist after snipping."""
         msgs = _make_turns(8)
         snip_old_messages(msgs, preserve_last_n_turns=4)
-        # The last 4 turn results should still be in the history
+        # 最后 4 轮的结果仍应保留在历史中
         contents = [m.get("content", "") for m in msgs]
         for i in range(4, 8):
             assert f"result {i}" in contents
@@ -161,7 +161,7 @@ class TestFindSplitPoint:
             {"role": "user", "content": "E" * 1000},
         ]
         idx = find_split_point(msgs, keep_ratio=0.3)
-        # With equal-size messages and keep_ratio=0.3, split should be around index 3-4
+        # 在消息大小相同且 keep_ratio=0.3 时，切分点应大致位于索引 3-4 附近
         assert 2 <= idx <= 4
 
     def test_single_message(self):
@@ -174,11 +174,11 @@ class TestFindSplitPoint:
         assert idx == 0
 
     def test_split_preserves_recent(self):
-        # Recent portion should contain ~30% of tokens
+        # 最近部分应大约包含 30% 的 token
         msgs = [{"role": "user", "content": "X" * 100} for _ in range(10)]
         idx = find_split_point(msgs, keep_ratio=0.3)
         total = estimate_tokens(msgs)
         recent = estimate_tokens(msgs[idx:])
-        # Recent should be roughly 30% of total (allow some tolerance)
+        # 最近部分应大致占总量的 30%（允许一定误差）
         assert recent >= total * 0.2
         assert recent <= total * 0.5
