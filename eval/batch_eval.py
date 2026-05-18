@@ -1,7 +1,7 @@
 """
 eval/batch_eval.py
 ——————————————————————————————————————————————
-Batch-run pycc against a subset (or full set) of SWE-bench Lite.
+Batch-run litecc against a subset (or full set) of SWE-bench Lite.
 
 Usage:
     # 运行前 30 个实例，并行使用 3 个 worker
@@ -32,15 +32,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Batch-run pycc on SWE-bench Lite")
-    parser.add_argument("--workdir",  default="/tmp/pycc_swe_runs",
-                        help="Directory to store all run outputs (default: /tmp/pycc_swe_runs)")
+    parser = argparse.ArgumentParser(description="Batch-run litecc on SWE-bench Lite")
+    parser.add_argument("--workdir",  default="/tmp/litecc_swe_runs",
+                        help="Directory to store all run outputs (default: /tmp/litecc_swe_runs)")
     parser.add_argument("--n",        type=int, default=None,
                         help="Number of instances to run (default: all 300)")
     parser.add_argument("--workers",  type=int, default=2,
                         help="Parallel workers (default: 2; limited by API rate)")
     parser.add_argument("--model",    default="deepseek/deepseek-v4-pro",
-                        help="pycc model string")
+                        help="litecc model string")
     parser.add_argument("--timeout",  type=int, default=300,
                         help="Per-instance timeout in seconds (default: 300)")
     parser.add_argument("--ids",      nargs="*",

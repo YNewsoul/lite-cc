@@ -32,7 +32,7 @@ _MIN_DURATION_S = 300
 _MIN_TURNS = 10
 
 _EXTRACTION_SYSTEM = """\
-You are a memory extraction agent for a coding assistant called pycc.
+You are a memory extraction agent for a coding assistant called litecc.
 Your job: read the session transcript below and extract ONLY facts that
 should persist to future sessions. Apply the CODE-FACT EXEMPTION strictly.
 
@@ -115,7 +115,7 @@ def _format_transcript(messages: list[dict], max_chars: int = 40_000) -> str:
 
 def _get_last_extraction_time(cwd: str) -> float:
     """Read the timestamp of the last successful extraction for this project."""
-    marker = Path.home() / ".pycc" / "memory" / ".last_extraction"
+    marker = Path.home() / ".litecc" / "memory" / ".last_extraction"
     try:
         data = json.loads(marker.read_text())
         return float(data.get(cwd, 0))
@@ -124,7 +124,7 @@ def _get_last_extraction_time(cwd: str) -> float:
 
 
 def _set_last_extraction_time(cwd: str) -> None:
-    marker = Path.home() / ".pycc" / "memory" / ".last_extraction"
+    marker = Path.home() / ".litecc" / "memory" / ".last_extraction"
     try:
         marker.parent.mkdir(parents=True, exist_ok=True)
         data: dict = {}

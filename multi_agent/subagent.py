@@ -151,13 +151,13 @@ def load_agent_definitions() -> Dict[str, AgentDefinition]:
     """Load all agent definitions: built-ins → user-level → project-level.
 
     Search paths:
-      ~/.pycc/agents/*.md   (user-level)
-      .pycc/agents/*.md     (project-level, overrides user)
+      ~/.litecc/agents/*.md   (user-level)
+      .litecc/agents/*.md     (project-level, overrides user)
     """
     defs: Dict[str, AgentDefinition] = dict(_BUILTIN_AGENTS)
 
     # 用户级定义
-    user_dir = Path.home() / ".pycc" / "agents"
+    user_dir = Path.home() / ".litecc" / "agents"
     if user_dir.is_dir():
         for p in sorted(user_dir.glob("*.md")):
             try:
@@ -167,7 +167,7 @@ def load_agent_definitions() -> Dict[str, AgentDefinition]:
                 pass
 
     # 项目级定义（可覆盖用户级）
-    proj_dir = Path.cwd() / ".pycc" / "agents"
+    proj_dir = Path.cwd() / ".litecc" / "agents"
     if proj_dir.is_dir():
         for p in sorted(proj_dir.glob("*.md")):
             try:

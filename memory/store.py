@@ -1,8 +1,8 @@
 """File-based memory storage with user-level and project-level scopes.
 
 Storage layout:
-  user scope    : ~/.pycc/memory/<slug>.md
-  project scope : .pycc/memory/<slug>.md  (relative to cwd)
+  user scope    : ~/.litecc/memory/<slug>.md
+  project scope : .litecc/memory/<slug>.md  (relative to cwd)
 
 MEMORY.md in each directory is the index file — rebuilt automatically after
 every save/delete. It is loaded into the system prompt to give Claude an
@@ -18,7 +18,7 @@ from typing import Literal
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 
-USER_MEMORY_DIR = Path.home() / ".pycc" / "memory"
+USER_MEMORY_DIR = Path.home() / ".litecc" / "memory"
 INDEX_FILENAME = "MEMORY.md"
 
 # 索引文件允许的最大行数/字节数（与 Claude Code 的限制保持一致）
@@ -28,15 +28,15 @@ MAX_INDEX_BYTES = 25_000
 
 def get_project_memory_dir() -> Path:
     """Return the project-local memory directory (relative to cwd)."""
-    return Path.cwd() / ".pycc" / "memory"
+    return Path.cwd() / ".litecc" / "memory"
 
 
 def get_memory_dir(scope: str = "user") -> Path:
     """Return the memory directory for the given scope.
 
     Args:
-        scope: "user" (global ~/.pycc/memory) or
-               "project" (.pycc/memory relative to cwd)
+        scope: "user" (global ~/.litecc/memory) or
+               "project" (.litecc/memory relative to cwd)
     """
     if scope == "project":
         return get_project_memory_dir()

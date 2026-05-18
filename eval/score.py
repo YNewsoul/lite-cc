@@ -142,7 +142,7 @@ def _score_official(results: list[dict], workdir: Path) -> None:
             predictions.append({
                 "instance_id": r["instance_id"],
                 "model_patch": r["patch"],
-                "model_name_or_path": r.get("model", "pycc"),
+                "model_name_or_path": r.get("model", "litecc"),
             })
 
     pred_file = workdir / "predictions.jsonl"
@@ -160,7 +160,7 @@ def _score_official(results: list[dict], workdir: Path) -> None:
         "--dataset_name", "princeton-nlp/SWE-bench_Lite",
         "--predictions_path", str(pred_file),
         "--max_workers", "4",
-        "--run_id", "pycc_eval",
+        "--run_id", "litecc_eval",
     ]
     swe_main()
 
@@ -168,8 +168,8 @@ def _score_official(results: list[dict], workdir: Path) -> None:
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Score pycc SWE-bench results")
-    parser.add_argument("--workdir",  default="/tmp/pycc_swe_runs")
+    parser = argparse.ArgumentParser(description="Score litecc SWE-bench results")
+    parser.add_argument("--workdir",  default="/tmp/litecc_swe_runs")
     parser.add_argument("--official", action="store_true",
                         help="Use official swebench Docker evaluation (slow, requires Docker)")
     args = parser.parse_args()

@@ -150,7 +150,7 @@ def _list_agent_types(params: dict, config: dict) -> str:
             lines.append(f"                           {tools_info}")
     lines.append("")
     lines.append(
-        "Create custom agents: place .md files in ~/.pycc/agents/ or .pycc/agents/"
+        "Create custom agents: place .md files in ~/.litecc/agents/ or .litecc/agents/"
     )
     return "\n".join(lines)
 
@@ -164,7 +164,7 @@ register_tool(ToolDef(
         "description": (
             "Spawn a sub-agent to handle a task autonomously. The sub-agent runs in a "
             "separate thread with its own conversation history. Supports specialized agent "
-            "types (coder, reviewer, researcher, tester, or custom from .pycc/agents/), "
+            "types (coder, reviewer, researcher, tester, or custom from .litecc/agents/), "
             "isolated git worktrees for parallel work, and background execution.\n\n"
             "When using isolation='worktree', the agent gets its own git branch and "
             "working copy — ideal for parallel coding tasks that shouldn't interfere."

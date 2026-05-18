@@ -1,4 +1,4 @@
-"""Task system for pycc."""
+"""Task system for litecc."""
 from .types import Task, TaskStatus
 from .store import (
     create_task, get_task, list_tasks, update_task,

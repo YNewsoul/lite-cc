@@ -16,7 +16,7 @@ from compaction import maybe_compact, apply_context_collapse
 from hooks.dispatcher import fire_pre_tool, fire_post_tool, fire_stop
 from plan_mode import is_plan_mode, get_plan_file, is_plan_file_target
 
-# ── 重新导出事件类型（供 pycc.py 使用）────────────────────────
+# ── 重新导出事件类型（供 litecc.py 使用）────────────────────────
 __all__ = [
     "AgentState", "run",
     "TextChunk", "ThinkingChunk",

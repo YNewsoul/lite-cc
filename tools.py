@@ -1,4 +1,4 @@
-"""pycc 的工具定义与实现。"""
+"""litecc 的工具定义与实现。"""
 import json
 import os
 import re
@@ -782,7 +782,7 @@ def _ask_user_question(
     """
     阻塞代理循环并在终端向用户显示问题。
 
-    REPL 循环（pycc.py）定期调用 drain_pending_questions()
+    REPL 循环（litecc.py）定期调用 drain_pending_questions()
     渲染问题并收集答案。使用 threading.Event 阻塞直到用户回复。
     """
     event = threading.Event()
@@ -885,7 +885,7 @@ def _sleeptimer(seconds: int, config: dict) -> str:
     import threading
     cb = config.get("_run_query_callback")
     if not cb:
-        return "错误：内部回调缺失，pycc 未提供 _run_query_callback"
+        return "错误：内部回调缺失，litecc 未提供 _run_query_callback"
         
     def worker():
         import time

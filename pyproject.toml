@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pycc"
+name = "litecc"
 version = "3.05.6"
-description = "pycc: A lightweight, hackable Python AI coding assistant"
+description = "litecc: A lightweight, hackable Python AI coding assistant"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -21,11 +21,11 @@ vision = ["Pillow"]
 dev    = ["pytest>=7.0"]
 
 [project.scripts]
-pycc = "pycc:main"
+litecc = "litecc:main"
 
 [tool.setuptools]
 py-modules = [
-    "pycc",
+    "litecc",
     "agent",
     "compaction",
     "config",

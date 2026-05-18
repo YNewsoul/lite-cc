@@ -1,9 +1,9 @@
-"""Configuration management for pycc (multi-provider)."""
+"""Configuration management for litecc (multi-provider)."""
 import os
 import json
 from pathlib import Path
 
-CONFIG_DIR        = Path.home() / ".pycc"
+CONFIG_DIR        = Path.home() / ".litecc"
 CONFIG_FILE       = CONFIG_DIR  / "config.json"
 HISTORY_FILE      = CONFIG_DIR  / "input_history.txt"
 SESSIONS_DIR      = CONFIG_DIR  / "sessions"

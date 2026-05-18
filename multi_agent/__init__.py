@@ -1,4 +1,4 @@
-"""Multi-agent package for pycc.
+"""Multi-agent package for litecc.
 
 Provides:
   - AgentDefinition  — typed agent definition (name, system_prompt, model, tools)

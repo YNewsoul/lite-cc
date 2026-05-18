@@ -1,7 +1,7 @@
 """Load MCP server configs from .mcp.json files (project + user level).
 
 Config search order (project-level overrides user-level by server name):
-  1. ~/.pycc/mcp.json          — user-level, lowest priority
+  1. ~/.litecc/mcp.json          — user-level, lowest priority
   2. <cwd>/.mcp.json                  — project-level, highest priority
 
 File format (matches Claude Code's .mcp.json format):
@@ -31,7 +31,7 @@ from .types import MCPServerConfig
 
 # ── Config file locations ─────────────────────────────────────────────────────
 
-USER_MCP_CONFIG  = Path.home() / ".pycc" / "mcp.json"
+USER_MCP_CONFIG  = Path.home() / ".litecc" / "mcp.json"
 PROJECT_MCP_NAME = ".mcp.json"   # looked up relative to cwd
 
 

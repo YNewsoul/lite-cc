@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-pycc — Claude Code 的极简 Python 实现。
+litecc — Claude Code 的极简 Python 实现。
 
 使用方法:
-  python pycc.py [选项] [提示词]
+  python litecc.py [选项] [提示词]
 
 选项:
   -p, --print          非交互模式: 执行提示词后退出 (同 --print-output)
@@ -48,10 +48,10 @@ import sys
 # 检查 Python 版本，低于 3.10 则退出
 if sys.version_info < (3, 10):
     sys.exit(
-        f"pycc 需要 Python 版本 ≥ 3.10。"
+        f"litecc 需要 Python 版本 ≥ 3.10。"
         f"当前检测版本: {sys.version}\n"
         f"提示: 尝试使用 python3.10 或更新版本运行 "
-        f"(例如 /opt/miniconda3/bin/python3.13 pycc.py)"
+        f"(例如 /opt/miniconda3/bin/python3.13 litecc.py)"
     )
 
 from tools import ask_input_interactive
@@ -212,7 +212,7 @@ _TOOL_SPINNER_PHRASES = [
     "⚡ 速度之力已激活...",
     "🌪️ 闪电般遍历抽象语法树...",
     "💫 扭曲时空...",
-    "🐆 Pycc 模式启动...",
+    "🐆 Litecc 模式启动...",
 ]
 
 # 辩论加载动画文案
@@ -1033,7 +1033,7 @@ def cmd_mcp(args: str, _state, config) -> bool:
         configs = load_mcp_configs()
         if not configs:
             info("未配置任何 MCP 服务器。")
-            info("可在 ~/.pycc/mcp.json 或 .mcp.json 中添加服务器")
+            info("可在 ~/.litecc/mcp.json 或 .mcp.json 中添加服务器")
             info("示例: /mcp add my-git uvx mcp-server-git")
         else:
             info("已配置 MCP 服务器但未连接，执行 /mcp reload")
@@ -1168,7 +1168,7 @@ def cmd_image(args: str, state, config) -> Union[bool, tuple]:
         from PIL import ImageGrab
         import io, base64
     except ImportError:
-        err("需要安装 Pillow 才能使用 /image，命令: pip install pycc[vision]")
+        err("需要安装 Pillow 才能使用 /image，命令: pip install litecc[vision]")
         if _sys.platform == "linux":
             err("Linux 系统还需要安装 xclip: sudo apt install xclip")
         return True
@@ -1738,7 +1738,7 @@ _CMD_META: dict[str, tuple[str, list[str]]] = {
     "copy":        ("复制最后回复到剪贴板",      []),
     "status":      ("显示会话状态和模型信息",   []),
     "doctor":      ("诊断安装环境",         []),
-    "exit":        ("退出 pycc",              []),
+    "exit":        ("退出 litecc",              []),
     "quit":        ("退出(别名 /exit)",             []),
     "resume":      ("恢复最近会话",                []),
 }
@@ -1837,7 +1837,7 @@ def repl(config: dict, initial_prompt: str = None):
 
         plan_active = is_plan_mode(config)
         plan_suffix = clr(" [计划模式]", "magenta", "bold") if plan_active else ""
-        print(clr("  ╭─ ", "dim") + clr("pycc ", "cyan", "bold") + ver_clr + clr(" ─────────────────────────────────╮", "dim"))
+        print(clr("  ╭─ ", "dim") + clr("litecc ", "cyan", "bold") + ver_clr + clr(" ─────────────────────────────────╮", "dim"))
         print(clr("  │", "dim") + clr("  模型: ", "dim") + model_clr + " " + prov_clr)
         print(clr("  │", "dim") + clr("  权限: ", "dim") + pmode + plan_suffix)
         print(clr("  │", "dim") + clr("  /model 切换模型 · /help 查看命令", "dim"))
@@ -1890,7 +1890,7 @@ def repl(config: dict, initial_prompt: str = None):
             # 重建系统提示词
             system_prompt = build_system_prompt(config)
 
-            print(clr("\n╭─ pycc ", "dim") + clr("●", "green") + clr(" ─────────────────────────", "dim"))
+            print(clr("\n╭─ litecc ", "dim") + clr("●", "green") + clr(" ─────────────────────────", "dim"))
 
             thinking_started = False # 当前是否正在显示 thinking 流
             spinner_shown = True # 当前是否正在显示加载动画
@@ -2203,8 +2203,8 @@ def repl(config: dict, initial_prompt: str = None):
 # 程序入口
 def main():
     parser = argparse.ArgumentParser(
-        prog="pycc",
-        description="pycc — Claude Code 的极简 Python 实现",
+        prog="litecc",
+        description="litecc — Claude Code 的极简 Python 实现",
         add_help=False,
     )
     parser.add_argument("prompt", nargs="*", help="初始提示词(非交互模式)")
@@ -2224,7 +2224,7 @@ def main():
     args = parser.parse_args()
 
     if args.version:
-        print(f"pycc v{VERSION}")
+        print(f"litecc v{VERSION}")
         sys.exit(0)
 
     if args.help:

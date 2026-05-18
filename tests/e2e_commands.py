@@ -37,7 +37,7 @@ def test_commands():
 
 def _run_tests(tmpdir):
     # 先 chdir，再导入模块，确保路径解析正确
-    from pycc import cmd_init, cmd_export, cmd_copy, cmd_status, info, err
+    from litecc import cmd_init, cmd_export, cmd_copy, cmd_status, info, err
 
     state = FakeState(messages=[
         {"role": "user", "content": "Write a hello world function"},

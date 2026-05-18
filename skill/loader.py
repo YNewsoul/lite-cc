@@ -29,8 +29,8 @@ class SkillDef:
 # 项目级技能优先级最高，用于覆盖用户级或内置 skill。
 def _get_skill_paths() -> list[Path]:
     return [
-        Path.cwd() / ".pycc" / "skills",   # project-level (priority)
-        Path.home() / ".pycc" / "skills",   # user-level
+        Path.cwd() / ".litecc" / "skills",   # project-level (priority)
+        Path.home() / ".litecc" / "skills",   # user-level
     ]
 
 

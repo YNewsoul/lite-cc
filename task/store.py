@@ -1,4 +1,4 @@
-"""Thread-safe task store: in-memory dict persisted to .pycc/tasks.json."""
+"""Thread-safe task store: in-memory dict persisted to .litecc/tasks.json."""
 from __future__ import annotations
 
 import json
@@ -12,7 +12,7 @@ from .types import Task, TaskStatus
 
 _lock = threading.Lock()
 
-# 任务以 ID 为键，按会话保存在 <cwd>/.pycc/tasks.json 中
+# 任务以 ID 为键，按会话保存在 <cwd>/.litecc/tasks.json 中
 # 存储默认常驻内存，首次访问时再从磁盘重新加载
 
 _tasks: dict[str, Task] = {}
@@ -22,7 +22,7 @@ _loaded = False
 # ── persistence ───────────────────────────────────────────────────────────────
 
 def _tasks_file() -> Path:
-    return Path.cwd() / ".pycc" / "tasks.json"
+    return Path.cwd() / ".litecc" / "tasks.json"
 
 
 def _load() -> None:

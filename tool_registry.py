@@ -1,4 +1,4 @@
-"""pycc 的工具插件注册中心。
+"""litecc 的工具插件注册中心。
 
 提供统一的工具定义注册、查找、schema 导出，
 以及带大结果落盘能力的分发执行。
@@ -149,7 +149,7 @@ def _offload_result_to_disk(
     try:
         session_id = config.get("_session_id", "default")
         tid = tool_use_id or _uuid.uuid4().hex[:12]
-        out_dir = Path.home() / ".pycc" / "tool_results" / session_id
+        out_dir = Path.home() / ".litecc" / "tool_results" / session_id
         out_dir.mkdir(parents=True, exist_ok=True)
         out_file = out_dir / f"{tid}.txt"
         out_file.write_text(result, encoding="utf-8", errors="replace")

@@ -1,12 +1,12 @@
-# pycc SWE-bench Evaluation Harness
+# litecc SWE-bench Evaluation Harness
 
-对 SWE-bench Lite（300个实例）系统性评测 pycc 在代码理解、多步规划和 bug 修复上的实际能力。
+对 SWE-bench Lite（300个实例）系统性评测 litecc 在代码理解、多步规划和 bug 修复上的实际能力。
 
 ## 文件结构
 
 ```
 eval/
-  run_instance.py   # 单实例运行：clone 仓库 → 调用 pycc → 提取 patch
+  run_instance.py   # 单实例运行：clone 仓库 → 调用 litecc → 提取 patch
   batch_eval.py     # 批量运行（多线程），支持断点续跑
   score.py          # 打分：快速启发式 + 官方 Docker 评测
   README.md         # 本文件
@@ -33,7 +33,7 @@ pip install swebench datasets
 python eval/batch_eval.py \
     --n 30 \
     --workers 2 \
-    --workdir /tmp/pycc_swe_lite \
+    --workdir /tmp/litecc_swe_lite \
     --model deepseek/deepseek-v4-pro \
     --timeout 300
 ```
@@ -41,7 +41,7 @@ python eval/batch_eval.py \
 ### 第三步：快速打分（不需要 Docker）
 
 ```bash
-python eval/score.py --workdir /tmp/pycc_swe_lite
+python eval/score.py --workdir /tmp/litecc_swe_lite
 ```
 
 输出示例：
@@ -66,7 +66,7 @@ docker ps
 python -c "from swebench.harness.docker_build import build_env_images; build_env_images('princeton-nlp/SWE-bench_Lite', max_workers=4)"
 
 # 运行官方评测
-python eval/score.py --workdir /tmp/pycc_swe_lite --official
+python eval/score.py --workdir /tmp/litecc_swe_lite --official
 ```
 
 ### 第五步：全量评测（300个实例）
@@ -74,7 +74,7 @@ python eval/score.py --workdir /tmp/pycc_swe_lite --official
 ```bash
 python eval/batch_eval.py \
     --workers 3 \
-    --workdir /tmp/pycc_swe_full \
+    --workdir /tmp/litecc_swe_full \
     --model deepseek/deepseek-v4-pro \
     --timeout 360
 ```
@@ -87,23 +87,23 @@ python eval/batch_eval.py \
 `batch_eval.py` 默认跳过已有 `result.json` 的实例，直接重跑即可续跑：
 
 ```bash
-python eval/batch_eval.py --n 30 --workdir /tmp/pycc_swe_lite
+python eval/batch_eval.py --n 30 --workdir /tmp/litecc_swe_lite
 ```
 
 强制重跑所有实例：
 
 ```bash
-python eval/batch_eval.py --n 30 --workdir /tmp/pycc_swe_lite --no-skip
+python eval/batch_eval.py --n 30 --workdir /tmp/litecc_swe_lite --no-skip
 ```
 
 ## 输出目录结构
 
 ```
-/tmp/pycc_swe_lite/
+/tmp/litecc_swe_lite/
   astropy__astropy-12907/
     result.json         # 元数据（instance_id, patch, error, elapsed_s）
     candidate.patch     # git diff 输出
-    run.log             # pycc 的完整 stdout/stderr
+    run.log             # litecc 的完整 stdout/stderr
     repo/               # 克隆的仓库（可删除节省空间）
   django__django-11099/
     ...
@@ -130,4 +130,4 @@ python eval/batch_eval.py --n 30 --workdir /tmp/pycc_swe_lite --no-skip
 | Claude Opus 4 + 工具链 | ~72% |
 | GPT-4o + SWE-agent | ~38% |
 | 无训练开源智能体 | ~15-25% |
-| **pycc 目标** | **>20%** |
+| **litecc 目标** | **>20%** |

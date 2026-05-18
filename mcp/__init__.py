@@ -1,10 +1,10 @@
-"""mcp package — Model Context Protocol client for pycc.
+"""mcp package — Model Context Protocol client for litecc.
 
 Usage
 -----
 MCP servers are configured in one of two JSON files:
 
-  ~/.pycc/mcp.json        (user-level, all projects)
+  ~/.litecc/mcp.json        (user-level, all projects)
   .mcp.json                      (project-level, current dir, overrides user)
 
 Format:

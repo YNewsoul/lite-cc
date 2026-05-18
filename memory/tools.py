@@ -142,8 +142,8 @@ register_tool(ToolDef(
                     "type": "string",
                     "enum": ["user", "project"],
                     "description": (
-                        "'user' (default) = ~/.pycc/memory/ shared across projects; "
-                        "'project' = .pycc/memory/ local to this project"
+                        "'user' (default) = ~/.litecc/memory/ shared across projects; "
+                        "'project' = .litecc/memory/ local to this project"
                     ),
                 },
             },

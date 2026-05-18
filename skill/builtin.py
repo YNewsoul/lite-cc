@@ -1,4 +1,4 @@
-"""Built-in skills that ship with pycc."""
+"""Built-in skills that ship with litecc."""
 from __future__ import annotations
 
 from .loader import SkillDef, register_builtin_skill

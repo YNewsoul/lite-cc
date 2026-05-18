@@ -1,10 +1,10 @@
-"""Memory package for pycc.
+"""Memory package for litecc.
 
 Provides persistent, file-based memory across conversations.
 
 Storage layout:
-  user scope    : ~/.pycc/memory/<slug>.md   (shared across projects)
-  project scope : .pycc/memory/<slug>.md     (local to cwd)
+  user scope    : ~/.litecc/memory/<slug>.md   (shared across projects)
+  project scope : .litecc/memory/<slug>.md     (local to cwd)
 
 The MEMORY.md index in each directory is auto-maintained and injected
 into the system prompt so Claude has an overview of available memories.

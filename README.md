@@ -1,11 +1,11 @@
-# pycc
+# litecc
 
-**pycc** 是一个轻量、可自由扩展的 Python AI 编程助手，灵感来自 Claude Code。它运行一个带工具调用的流式智能体循环，开箱支持 10+ 个模型厂商，并提供简洁的 REPL，可通过自定义技能（Skill）和 MCP 服务器随意扩展。
+**litecc** 是一个轻量、可自由扩展的 Python AI 编程助手，灵感来自 Claude Code。它运行一个带工具调用的流式智能体循环，开箱支持 10+ 个模型厂商，并提供简洁的 REPL，可通过自定义技能（Skill）和 MCP 服务器随意扩展。
 
 ```bash
 pip install anthropic          # 或 openai，或任意支持的厂商 SDK
 export ANTHROPIC_API_KEY=...
-python pycc.py                 # 启动 REPL
+python litecc.py                 # 启动 REPL
 ```
 
 要求 Python ≥ 3.10。
@@ -22,7 +22,7 @@ python pycc.py                 # 启动 REPL
 | 27 个内置工具 | Read · Write · Edit · Bash · Glob · Grep · WebFetch · WebSearch · **NotebookEdit** · **GetDiagnostics** · MemorySave · MemoryDelete · MemorySearch · MemoryList · Agent · SendMessage · CheckAgentResult · ListAgentTasks · ListAgentTypes · Skill · SkillList · AskUserQuestion · TaskCreate/Update/Get/List · **SleepTimer** · **EnterPlanMode** · **ExitPlanMode** · *（MCP 工具在启动时自动注册）* |
 | MCP 集成 | 接入任意 MCP 服务器（stdio/SSE/HTTP），工具自动注册，Claude 可直接调用 |
 | AskUserQuestion | Claude 可在任务中途暂停并向用户提问，支持编号选项 |
-| 任务管理 | TaskCreate/Update/Get/List 工具；顺序 ID；元数据；持久化至 `.pycc/tasks.json`；`/tasks` REPL 命令 |
+| 任务管理 | TaskCreate/Update/Get/List 工具；顺序 ID；元数据；持久化至 `.litecc/tasks.json`；`/tasks` REPL 命令 |
 | 差异视图 | Edit 和 Write 操作后显示 git 风格的红绿差异 |
 | 上下文压缩 | 五层渐进式压缩策略（磁盘卸载→旧轮次移除→可复现工具结果清除→读时投影→LLM摘要），按内容可恢复性决定驱逐优先级；读时投影在 API 调用瞬间生成压缩视图而不修改原始历史 |
 | 持久记忆 | 三层管道：每轮后台检索（flash 模型并行选 ≤5 条注入）→ 会话结束自动提取（Layer 2，条件触发）→ AutoDream 周期整合去重（Layer 3，每 5 次会话）；双作用域（user + project），4 种类型，严格代码事实豁免 |
@@ -81,20 +81,20 @@ python pycc.py                 # 启动 REPL
 
 ### 推荐：使用 `uv` 安装为全局命令
 
-[uv](https://docs.astral.sh/uv/) 将 `pycc` 安装到隔离环境并添加到 PATH，可在任意位置运行：
+[uv](https://docs.astral.sh/uv/) 将 `litecc` 安装到隔离环境并添加到 PATH，可在任意位置运行：
 
 ```bash
 # 安装
-cd pycc
+cd litecc
 uv tool install .
 ```
 
-安装完成后，`pycc` 即为全局命令：
+安装完成后，`litecc` 即为全局命令：
 
 ```bash
-pycc                        # 启动 REPL
-pycc --model gpt-4o         # 选择模型
-pycc -p "explain this"      # 非交互模式
+litecc                        # 启动 REPL
+litecc --model gpt-4o         # 选择模型
+litecc -p "explain this"      # 非交互模式
 ```
 
 拉取新代码后更新：
@@ -106,20 +106,20 @@ uv tool install . --reinstall
 卸载：
 
 ```bash
-uv tool uninstall pycc
+uv tool uninstall litecc
 ```
 
 ### 备选：直接从仓库运行
 
 ```bash
 git clone https://github.com/SafeRL-Lab/clawspring
-cd pycc
+cd litecc
 
 pip install -r requirements.txt
 # 或手动安装：
 pip install anthropic openai httpx rich
 
-python pycc.py
+python litecc.py
 ```
 
 ---
@@ -134,14 +134,14 @@ python pycc.py
 export ANTHROPIC_API_KEY=sk-ant-api03-...
 
 # 默认模型（claude-opus-4-6）
-pycc
+litecc
 
 # 指定模型
-pycc --model claude-sonnet-4-6
-pycc --model claude-haiku-4-5-20251001
+litecc --model claude-sonnet-4-6
+litecc --model claude-haiku-4-5-20251001
 
 # 开启 Extended Thinking
-pycc --model claude-opus-4-6 --thinking --verbose
+litecc --model claude-opus-4-6 --thinking --verbose
 ```
 
 ### OpenAI GPT
@@ -151,10 +151,10 @@ pycc --model claude-opus-4-6 --thinking --verbose
 ```bash
 export OPENAI_API_KEY=sk-...
 
-pycc --model gpt-4o
-pycc --model gpt-4o-mini
-pycc --model gpt-4.1-mini
-pycc --model o3-mini
+litecc --model gpt-4o
+litecc --model gpt-4o-mini
+litecc --model gpt-4.1-mini
+litecc --model o3-mini
 ```
 
 ### Google Gemini
@@ -164,9 +164,9 @@ pycc --model o3-mini
 ```bash
 export GEMINI_API_KEY=AIza...
 
-pycc --model gemini/gemini-2.0-flash
-pycc --model gemini/gemini-1.5-pro
-pycc --model gemini/gemini-2.5-pro-preview-03-25
+litecc --model gemini/gemini-2.0-flash
+litecc --model gemini/gemini-1.5-pro
+litecc --model gemini/gemini-2.5-pro-preview-03-25
 ```
 
 ### Kimi（Moonshot AI）
@@ -176,8 +176,8 @@ pycc --model gemini/gemini-2.5-pro-preview-03-25
 ```bash
 export MOONSHOT_API_KEY=sk-...
 
-pycc --model kimi/moonshot-v1-32k
-pycc --model kimi/moonshot-v1-128k
+litecc --model kimi/moonshot-v1-32k
+litecc --model kimi/moonshot-v1-128k
 ```
 
 ### Qwen（阿里云 DashScope）
@@ -187,9 +187,9 @@ pycc --model kimi/moonshot-v1-128k
 ```bash
 export DASHSCOPE_API_KEY=sk-...
 
-pycc --model qwen/Qwen3.5-Plus
-pycc --model qwen/Qwen3-MAX
-pycc --model qwen/Qwen3.5-Flash
+litecc --model qwen/Qwen3.5-Plus
+litecc --model qwen/Qwen3-MAX
+litecc --model qwen/Qwen3.5-Flash
 ```
 
 ### 智谱 GLM
@@ -199,8 +199,8 @@ pycc --model qwen/Qwen3.5-Flash
 ```bash
 export ZHIPU_API_KEY=...
 
-pycc --model zhipu/glm-4-plus
-pycc --model zhipu/glm-4-flash   # 免费额度
+litecc --model zhipu/glm-4-plus
+litecc --model zhipu/glm-4-flash   # 免费额度
 ```
 
 ### DeepSeek
@@ -210,8 +210,8 @@ pycc --model zhipu/glm-4-flash   # 免费额度
 ```bash
 export DEEPSEEK_API_KEY=sk-...
 
-pycc --model deepseek/deepseek-chat
-pycc --model deepseek/deepseek-reasoner
+litecc --model deepseek/deepseek-chat
+litecc --model deepseek/deepseek-reasoner
 ```
 
 ### MiniMax
@@ -221,9 +221,9 @@ pycc --model deepseek/deepseek-reasoner
 ```bash
 export MINIMAX_API_KEY=...
 
-pycc --model minimax/MiniMax-Text-01
-pycc --model minimax/MiniMax-VL-01
-pycc --model minimax/abab6.5s-chat
+litecc --model minimax/MiniMax-Text-01
+litecc --model minimax/MiniMax-VL-01
+litecc --model minimax/abab6.5s-chat
 ```
 
 ---
@@ -234,17 +234,17 @@ pycc --model minimax/abab6.5s-chat
 
 ```bash
 # 1. 按前缀自动检测（适用于知名模型）
-pycc --model gpt-4o
-pycc --model gemini-2.0-flash
-pycc --model deepseek-chat
+litecc --model gpt-4o
+litecc --model gemini-2.0-flash
+litecc --model deepseek-chat
 
 # 2. 斜杠显式指定厂商前缀
-pycc --model deepseek/deepseek-v4-pro
-pycc --model kimi/moonshot-v1-128k
+litecc --model deepseek/deepseek-v4-pro
+litecc --model kimi/moonshot-v1-128k
 
 # 3. 冒号显式指定厂商前缀（同样有效）
-pycc --model kimi:moonshot-v1-32k
-pycc --model qwen:qwen-max
+litecc --model kimi:moonshot-v1-32k
+litecc --model qwen:qwen-max
 ```
 
 **自动检测规则：**
@@ -265,8 +265,8 @@ pycc --model qwen:qwen-max
 ## CLI 参考
 
 ```
-pycc [OPTIONS] [PROMPT]
-# 或：python pycc.py [OPTIONS] [PROMPT]
+litecc [OPTIONS] [PROMPT]
+# 或：python litecc.py [OPTIONS] [PROMPT]
 
 Options:
   -p, --print          非交互模式：运行提示词后退出
@@ -282,21 +282,21 @@ Options:
 
 ```bash
 # 交互式 REPL，使用默认模型
-pycc
+litecc
 
 # 启动时切换模型
-pycc --model gpt-4o
-pycc -m deepseek/deepseek-v4-pro
+litecc --model gpt-4o
+litecc -m deepseek/deepseek-v4-pro
 
 # 非交互 / 脚本
-pycc --print "Write a Python fibonacci function"
-pycc -p "Explain the Rust borrow checker in 3 sentences" -m gemini/gemini-2.0-flash
+litecc --print "Write a Python fibonacci function"
+litecc -p "Explain the Rust borrow checker in 3 sentences" -m gemini/gemini-2.0-flash
 
 # CI / 自动化（无权限提示）
-pycc --accept-all --print "Initialize a Python project with pyproject.toml"
+litecc --accept-all --print "Initialize a Python project with pyproject.toml"
 
 # 调试模式（显示 token + 思考过程）
-pycc --thinking --verbose
+litecc --thinking --verbose
 ```
 
 ---
@@ -405,12 +405,12 @@ export MINIMAX_API_KEY=...           # MiniMax
 /config minimax_api_key=...
 ```
 
-Key 保存到 `~/.pycc/config.json`，下次启动自动加载。
+Key 保存到 `~/.litecc/config.json`，下次启动自动加载。
 
 ### 方法三：直接编辑配置文件
 
 ```json
-// ~/.pycc/config.json
+// ~/.litecc/config.json
 {
   "model": "qwen/qwen-max",
   "max_tokens": 8192,
@@ -519,7 +519,7 @@ MCP 工具从已配置的服务器自动发现，以 `mcp__<server>__<tool>` 格
 
 ## 记忆系统
 
-pycc 内置三层记忆管道，让助手能够跨对话积累上下文。所有层均异步运行，不阻塞主交互循环。
+litecc 内置三层记忆管道，让助手能够跨对话积累上下文。所有层均异步运行，不阻塞主交互循环。
 
 ### 存储结构
 
@@ -527,8 +527,8 @@ pycc 内置三层记忆管道，让助手能够跨对话积累上下文。所有
 
 | 作用域 | 路径 | 可见性 |
 |---|---|---|
-| **User**（默认）| `~/.pycc/memory/` | 跨所有项目共享 |
-| **Project** | `.pycc/memory/`（当前目录）| 仅限当前仓库 |
+| **User**（默认）| `~/.litecc/memory/` | 跨所有项目共享 |
+| **Project** | `.litecc/memory/`（当前目录）| 仅限当前仓库 |
 
 每次写入或删除后，`MEMORY.md` 索引自动重建（≤ 200 行 / 25 KB），并注入系统提示，让模型始终有记忆概览。
 
@@ -628,10 +628,10 @@ created: 2026-05-01
 **快速上手——自定义技能：**
 
 ```bash
-mkdir -p ~/.pycc/skills
+mkdir -p ~/.litecc/skills
 ```
 
-创建 `~/.pycc/skills/deploy.md`：
+创建 `~/.litecc/skills/deploy.md`：
 
 ```markdown
 ---
@@ -667,8 +667,8 @@ AI: [将 2.1.0 版本部署到 staging 环境]
 **技能搜索路径：**
 
 ```
-./.pycc/skills/     # 项目级（覆盖用户级）
-~/.pycc/skills/     # 用户级
+./.litecc/skills/     # 项目级（覆盖用户级）
+~/.litecc/skills/     # 用户级
 ```
 
 ---
@@ -707,7 +707,7 @@ AI: [调用 CheckAgentResult / SendMessage 跟进]
 Agent(prompt="重构 auth 模块", isolation="worktree")
 ```
 
-**自定义智能体类型** — 创建 `~/.pycc/agents/myagent.md`：
+**自定义智能体类型** — 创建 `~/.litecc/agents/myagent.md`：
 ```markdown
 ---
 name: myagent
@@ -738,7 +738,7 @@ MCP 允许你接入任意外部工具服务器——本地子进程或远程 HTT
 
 ### 配置
 
-在项目目录放置 `.mcp.json` 文件，**或**编辑 `~/.pycc/mcp.json` 配置全局服务器。
+在项目目录放置 `.mcp.json` 文件，**或**编辑 `~/.litecc/mcp.json` 配置全局服务器。
 
 ```json
 {
@@ -762,7 +762,7 @@ MCP 允许你接入任意外部工具服务器——本地子进程或远程 HTT
 }
 ```
 
-配置优先级：`.mcp.json`（项目）按服务器名覆盖 `~/.pycc/mcp.json`（用户）。
+配置优先级：`.mcp.json`（项目）按服务器名覆盖 `~/.litecc/mcp.json`（用户）。
 
 ### 快速上手
 
@@ -837,7 +837,7 @@ Claude 可以在任务中途暂停，交互式地向你提问后再继续。
 
 ### 持久化
 
-每次变更后任务保存到当前工作目录的 `.pycc/tasks.json`，首次访问时重新加载。
+每次变更后任务保存到当前工作目录的 `.litecc/tasks.json`，首次访问时重新加载。
 
 ### REPL 命令
 
@@ -946,7 +946,7 @@ Claude 可以在任务中途暂停，交互式地向你提问后再继续。
 
 ## CLAUDE.md 支持
 
-在项目中放置 `CLAUDE.md` 文件，为模型提供代码库的持久上下文。pycc 自动查找并注入到系统提示中。
+在项目中放置 `CLAUDE.md` 文件，为模型提供代码库的持久上下文。litecc 自动查找并注入到系统提示中。
 
 ```
 ~/.claude/CLAUDE.md          # 全局——适用于所有项目
@@ -960,7 +960,7 @@ Claude 可以在任务中途暂停，交互式地向你提问后再继续。
 每次退出自动保存到三个位置：
 
 ```
-~/.pycc/sessions/
+~/.litecc/sessions/
 ├── history.json                    ← 主记录：所有会话
 ├── mr_sessions/
 │   └── session_latest.json        ← 最近一次（/resume）
@@ -972,7 +972,7 @@ Claude 可以在任务中途暂停，交互式地向你提问后再继续。
 **快速恢复：**
 
 ```bash
-pycc
+litecc
 [myproject] ❯ /resume
 ✓  已加载会话（42 条消息）
 ```
@@ -991,8 +991,8 @@ pycc
 ## 项目结构
 
 ```
-pycc/
-├── pycc.py                # 入口：REPL + 斜杠命令 + 差异渲染 + Rich Live 流式输出
+litecc/
+├── litecc.py                # 入口：REPL + 斜杠命令 + 差异渲染 + Rich Live 流式输出
 ├── agent.py              # 智能体循环：流式输出、工具分发、压缩
 ├── providers.py          # 多厂商：Anthropic、OpenAI 兼容流式
 ├── tools.py              # 核心工具 + 注册连接
@@ -1042,37 +1042,37 @@ pycc/
   估算费用：   $0.0648 USD
 ```
 
-**Q：能通过管道向 pycc 输入内容吗？**
+**Q：能通过管道向 litecc 输入内容吗？**
 
 ```bash
-echo "解释这个文件" | pycc --print --accept-all
-cat error.log | pycc -p "这个错误是什么原因导致的？"
+echo "解释这个文件" | litecc --print --accept-all
+cat error.log | litecc -p "这个错误是什么原因导致的？"
 ```
 
 ---
 
 ## SWE-bench Lite 评测
 
-`eval/` 目录提供完整的评测管道，可在 SWE-bench Lite（300 个真实 GitHub issue）上系统测试 pycc 的 bug 修复能力。
+`eval/` 目录提供完整的评测管道，可在 SWE-bench Lite（300 个真实 GitHub issue）上系统测试 litecc 的 bug 修复能力。
 
 ### 评测流程
 
 1. 从 HuggingFace 加载数据集，每个实例包含：repo、base commit、原始 issue 正文（`problem_statement`）、FAIL_TO_PASS 测试用例
 2. 将仓库 clone 到 bug 发生时的 commit
-3. 将 issue 正文直接作为 prompt 传给 pycc（`--print --accept-all`），模型自主探索代码库并写修复
+3. 将 issue 正文直接作为 prompt 传给 litecc（`--print --accept-all`），模型自主探索代码库并写修复
 4. `git diff` 提取 patch
 5. 打分：启发式代理（无需 Docker）或官方 Docker 评测
 
 ```bash
 # 运行 30 个实例
-python eval/batch_eval.py --n 30 --workers 2 --workdir /tmp/pycc_swe \
+python eval/batch_eval.py --n 30 --workers 2 --workdir /tmp/litecc_swe \
     --model deepseek/deepseek-v4-pro --timeout 600
 
 # 启发式打分（快速）
-python eval/score.py --workdir /tmp/pycc_swe
+python eval/score.py --workdir /tmp/litecc_swe
 
 # 官方 Docker 打分（精确）
-python eval/score.py --workdir /tmp/pycc_swe --official
+python eval/score.py --workdir /tmp/litecc_swe --official
 ```
 
 ### 当前结果（30 实例子集，2026-05-06）

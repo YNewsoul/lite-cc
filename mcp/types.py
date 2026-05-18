@@ -110,7 +110,7 @@ def make_notification(method: str, params: Optional[dict] = None) -> dict:
 MCP_PROTOCOL_VERSION = "2024-11-05"
 
 CLIENT_INFO = {
-    "name": "pycc",
+    "name": "litecc",
     "version": "1.0.0",
 }
 

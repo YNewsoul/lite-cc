@@ -1,7 +1,7 @@
 """
 eval/run_instance.py
 ——————————————————————————————————————————————
-Run pycc against a single SWE-bench Lite instance and produce a candidate patch.
+Run litecc against a single SWE-bench Lite instance and produce a candidate patch.
 
 Usage (standalone):
     python eval/run_instance.py --instance_id astropy__astropy-12907 \
@@ -56,22 +56,22 @@ def clone_repo(repo: str, base_commit: str, dest: Path, timeout: int = 180) -> N
         raise RuntimeError(f"git checkout {base_commit} failed: {out}")
 
 
-def run_pycc(problem_statement: str, repo_dir: Path, model: str,
+def run_litecc(problem_statement: str, repo_dir: Path, model: str,
              timeout: int = 300) -> tuple[str, str]:
     """
-    Invoke pycc in non-interactive print mode.
+    Invoke litecc in non-interactive print mode.
 
     Returns (stdout, stderr).
     """
     prompt = _build_prompt(problem_statement)
 
-    # 始终使用源码里的 pycc.py，避免误用过期的已安装二进制
-    pycc_root = Path(__file__).resolve().parent.parent
-    cmd = [sys.executable, str(pycc_root / "pycc.py"),
+    # 始终使用源码里的 litecc.py，避免误用过期的已安装二进制
+    litecc_root = Path(__file__).resolve().parent.parent
+    cmd = [sys.executable, str(litecc_root / "litecc.py"),
            "--print", "--accept-all", "--model", model, prompt]
 
     env = dict(os.environ)
-    env["PYCC_NO_HISTORY"] = "1"   # skip readline history in batch mode
+    env["LITECC_NO_HISTORY"] = "1"   # skip readline history in batch mode
 
     r = subprocess.run(
         cmd,
@@ -111,13 +111,13 @@ def run_instance(
     skip_if_exists: bool = True,
 ) -> dict:
     """
-    Run pycc on one SWE-bench instance.
+    Run litecc on one SWE-bench instance.
 
     Args:
         instance:       Row from the HuggingFace dataset.
         workdir:        Root directory for all run outputs.
-        model:          pycc model string.
-        timeout:        Seconds to allow pycc to run.
+        model:          litecc model string.
+        timeout:        Seconds to allow litecc to run.
         skip_if_exists: If True and result.json already exists, skip.
 
     Returns:
@@ -154,8 +154,8 @@ def run_instance(
         if not (repo_dir / ".git").exists():
             clone_repo(repo, commit, repo_dir, timeout=180)
 
-        # 2. Run pycc
-        stdout, stderr = run_pycc(problem, repo_dir, model, timeout=timeout)
+        # 2. Run litecc
+        stdout, stderr = run_litecc(problem, repo_dir, model, timeout=timeout)
 
         with open(log_path, "w", encoding="utf-8") as f:
             f.write("=== STDOUT ===\n")
@@ -184,7 +184,7 @@ def run_instance(
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Run pycc on one SWE-bench instance")
+    parser = argparse.ArgumentParser(description="Run litecc on one SWE-bench instance")
     parser.add_argument("--instance_id", required=True)
     parser.add_argument("--workdir",     required=True)
     parser.add_argument("--model",       default="deepseek/deepseek-v4-pro")

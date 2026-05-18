@@ -1,5 +1,5 @@
 """
-pycc 的多厂商支持模块。
+litecc 的多厂商支持模块。
 
 支持的厂商：
   anthropic  — Claude（claude-opus-4-6、claude-sonnet-4-6 等）

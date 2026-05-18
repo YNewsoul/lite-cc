@@ -25,7 +25,7 @@ _DREAM_SESSION_EVERY = 5       # trigger after every 5 sessions
 _STALE_DAYS          = 90      # memories older than this are flagged
 
 _CONSOLIDATE_SYSTEM = """\
-You are a memory consolidation agent for a coding assistant called pycc.
+You are a memory consolidation agent for a coding assistant called litecc.
 You are given a list of existing memory entries. Your job:
 
 1. DEDUPLICATE: Identify groups of entries that contain the same information.
@@ -164,7 +164,7 @@ def _apply_consolidation(plan: dict, entries: list[dict]) -> tuple[int, int, int
 
 
 def _get_dream_meta() -> dict:
-    marker = Path.home() / ".pycc" / "memory" / ".dream_meta"
+    marker = Path.home() / ".litecc" / "memory" / ".dream_meta"
     try:
         return json.loads(marker.read_text())
     except Exception:
@@ -172,7 +172,7 @@ def _get_dream_meta() -> dict:
 
 
 def _set_dream_meta(meta: dict) -> None:
-    marker = Path.home() / ".pycc" / "memory" / ".dream_meta"
+    marker = Path.home() / ".litecc" / "memory" / ".dream_meta"
     try:
         marker.parent.mkdir(parents=True, exist_ok=True)
         marker.write_text(json.dumps(meta, indent=2))
