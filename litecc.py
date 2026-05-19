@@ -56,6 +56,15 @@ if sys.version_info < (3, 10):
 
 from tools import ask_input_interactive
 from plan_mode import is_plan_mode, enter_plan_mode, exit_plan_mode, get_plan_file
+# 这几个 `litecc_*` 模块是本轮重构后拆出来的职责层：
+# - `bg_jobs` 负责后台任务和会话结束后的附加工作
+# - `session_store` 负责会话持久化
+# - `ui` 负责终端渲染
+# - `CommandRegistry` 负责命令分发和补全
+import litecc_background as bg_jobs
+import litecc_sessions as session_store
+import litecc_ui as ui
+from litecc_commands import CommandRegistry
 
 import os
 import re
@@ -64,12 +73,6 @@ import uuid
 if sys.platform == "win32":
     os.system("")
 import json
-# 导入 readline 用于命令行补全，Windows 兼容处理
-try:
-    import readline
-except ImportError:
-    readline = None
-import atexit
 import argparse
 import textwrap
 from pathlib import Path
@@ -77,22 +80,10 @@ from datetime import datetime
 from typing import Optional, Union
 import threading
 
-# 可选依赖：用于 Markdown 渲染的 rich 库
-try:
-    from rich.console import Console
-    from rich.markdown import Markdown
-    from rich.live import Live
-    from rich.syntax import Syntax
-    from rich.panel import Panel
-    from rich import print as rprint
-    _RICH = True
-    console = Console()
-except ImportError:
-    _RICH = False
-    console = None
-
 # 版本号
 VERSION = "3.05.5"
+_RICH = ui.RICH_AVAILABLE
+console = ui.console
 
 # ANSI 颜色代码定义（即使使用 rich 也会用于非 Markdown 输出）
 C = {
@@ -109,92 +100,52 @@ C = {
 
 # 为文本添加颜色样式
 def clr(text: str, *keys: str) -> str:
-    return "".join(C[k] for k in keys) + str(text) + C["reset"]
+    return ui.clr(text, *keys)
 
 # 日志打印工具函数
-def info(msg: str):   print(clr(msg, "cyan"))
-def ok(msg: str):     print(clr(msg, "green"))
-def warn(msg: str):   print(clr(f"警告: {msg}", "yellow"))
-def err(msg: str):    print(clr(f"错误: {msg}", "red"), file=sys.stderr)
+def info(msg: str):
+    ui.info(msg)
+
+
+def ok(msg: str):
+    ui.ok(msg)
+
+
+def warn(msg: str):
+    ui.warn(msg)
+
+
+def err(msg: str):
+    ui.err(msg)
 
 
 # 渲染差异文本，红色表示删除，绿色表示新增
 def render_diff(text: str):
-    """打印带 ANSI 颜色的差异文本：红色删除，绿色新增。"""
-    for line in text.splitlines():
-        if line.startswith("+++") or line.startswith("---"):
-            print(C["bold"] + line + C["reset"])
-        elif line.startswith("+"):
-            print(C["green"] + line + C["reset"])
-        elif line.startswith("-"):
-            print(C["red"] + line + C["reset"])
-        elif line.startswith("@@"):
-            print(C["cyan"] + line + C["reset"])
-        else:
-            print(line)
+    """委托到 UI 模块渲染 diff。"""
+    ui.render_diff(text)
 
 # 检查文本是否包含标准格式的差异内容
 def _has_diff(text: str) -> bool:
-    """检查文本是否包含统一差异格式内容。"""
-    return "--- a/" in text and "+++ b/" in text
+    """委托到 UI 模块判断是否是 diff。"""
+    return ui.has_diff(text)
 
 
-# 对话渲染相关全局变量
-_accumulated_text: list[str] = []   # 流式输出时的文本缓冲区
-_current_live: "Live | None" = None  # 活跃的 Rich 实时渲染实例
-_RICH_LIVE = True  # 通过配置 rich_live=false 可禁用原地实时流式输出
-
-# 创建可渲染对象：包含标记则返回 Markdown，否则返回纯文本
-def _make_renderable(text: str):
-    """返回 Rich 可渲染对象：包含标记则用 Markdown，否则用纯文本。"""
-    if any(c in text for c in ("#", "*", "`", "_", "[")):
-        return Markdown(text)
-    return text
-
-# 启动 Rich 实时渲染块（无 Rich 则不执行）
-def _start_live() -> None:
-    """启动 Rich 实时块用于原地 Markdown 流式渲染（无 Rich 则空操作）。"""
-    global _current_live
-    if _RICH and _RICH_LIVE and _current_live is None:
-        _current_live = Live(console=console, auto_refresh=False,
-                             vertical_overflow="visible")
-        _current_live.start()
+# 对话渲染开关
+_RICH_LIVE = True
 
 # 流式输出文本片段
 def stream_text(chunk: str) -> None:
-    """缓冲文本片段；Rich 可用时原地更新实时渲染，否则直接打印。"""
-    global _current_live
-    _accumulated_text.append(chunk)
-    if _RICH and _RICH_LIVE:
-        if _current_live is None:
-            _start_live()
-        _current_live.update(_make_renderable("".join(_accumulated_text)), refresh=True)
-    else:
-        print(chunk, end="", flush=True)
+    """委托到 UI 模块处理流式文本渲染。"""
+    ui.stream_text(chunk)
 
 # 流式输出思考过程（仅详细模式下显示）
 def stream_thinking(chunk: str, verbose: bool):
-    if verbose:
-        # 清理模型逐令牌流式输出时的内部换行符
-        clean_chunk = chunk.replace("\n", " ")
-        if clean_chunk:
-            # 此处不使用 clr() 包装，避免每个令牌后输出重置符导致格式异常
-            print(f"{C['dim']}{clean_chunk}", end="", flush=True)
+    ui.stream_thinking(chunk, verbose)
 
 # 刷新响应内容，结束实时渲染
 def flush_response() -> None:
-    """提交缓冲文本到屏幕：停止实时渲染（固定 Markdown 渲染结果）。"""
-    global _current_live
-    full = "".join(_accumulated_text)
-    _accumulated_text.clear()
-    if _current_live is not None:
-        _current_live.stop()
-        _current_live = None
-    elif _RICH and _RICH_LIVE and full.strip():
-        # 备用方案：无实时渲染但 Rich 可用时直接渲染
-        console.print(_make_renderable(full))
-    else:
-        print()
+    """委托到 UI 模块刷新输出。"""
+    ui.flush_response()
 
 # 工具执行加载动画文案
 _TOOL_SPINNER_PHRASES = [
@@ -249,63 +200,25 @@ def _run_tool_spinner():
 
 # 启动工具加载动画
 def _start_tool_spinner():
-    global _tool_spinner_thread
-    if _tool_spinner_thread and _tool_spinner_thread.is_alive():
-        return
-    import random
-    with _spinner_lock:
-        global _spinner_phrase
-        _spinner_phrase = random.choice(_TOOL_SPINNER_PHRASES)
-    _tool_spinner_stop.clear()
-    _tool_spinner_thread = threading.Thread(target=_run_tool_spinner, daemon=True)
-    _tool_spinner_thread.start()
+    ui.start_tool_spinner()
 
 # 切换加载动画文案（不停止动画）
 def _change_spinner_phrase():
-    """不停止动画的情况下切换加载文案。"""
-    import random
-    with _spinner_lock:
-        global _spinner_phrase
-        _spinner_phrase = random.choice(_TOOL_SPINNER_PHRASES)
+    """委托到 UI 模块切换加载文案。"""
+    ui.change_spinner_phrase()
 
 # 停止工具加载动画
 def _stop_tool_spinner():
-    global _tool_spinner_thread
-    if not _tool_spinner_thread:
-        return
-    _tool_spinner_stop.set()
-    _tool_spinner_thread.join(timeout=1)
-    _tool_spinner_thread = None
-    # 清空当前行的动画
-    sys.stdout.write(f"\r{' ' * 50}\r")
-    sys.stdout.flush()
+    ui.stop_tool_spinner()
 
 # 打印工具调用开始信息
 def print_tool_start(name: str, inputs: dict, verbose: bool):
-    """显示工具调用信息。"""
-    desc = _tool_desc(name, inputs)
-    print(clr(f"  ⚙  {desc}", "dim", "cyan"), flush=True)
-    if verbose:
-        print(clr(f"     输入参数: {json.dumps(inputs, ensure_ascii=False)[:200]}", "dim"))
+    """委托到 UI 模块渲染工具开始事件。"""
+    ui.print_tool_start(name, inputs, verbose)
 
 # 打印工具调用结束信息
 def print_tool_end(name: str, result: str, verbose: bool):
-    lines = result.count("\n") + 1
-    size = len(result)
-    summary = f"→ {lines} 行 ({size} 字符)"
-    if not result.startswith("Error") and not result.startswith("Denied"):
-        print(clr(f"  ✓ {summary}", "dim", "green"), flush=True)
-        # 为编辑/写入结果渲染差异
-        if name in ("Edit", "Write") and _has_diff(result):
-            parts = result.split("\n\n", 1)
-            if len(parts) == 2:
-                print(clr(f"  {parts[0]}", "dim"))
-                render_diff(parts[1])
-    else:
-        print(clr(f"  ✗ {result[:120]}", "dim", "red"), flush=True)
-    if verbose and not result.startswith("Denied"):
-        preview = result[:500] + ("…" if len(result) > 500 else "")
-        print(clr(f"     {preview.replace(chr(10), chr(10)+'     ')}", "dim"))
+    ui.print_tool_end(name, result, verbose)
 
 # 生成工具调用描述
 def _tool_desc(name: str, inputs: dict) -> str:
@@ -437,158 +350,94 @@ def cmd_config(args: str, _state, config) -> bool:
 # 保存会话
 def cmd_save(args: str, state, config) -> bool:
     from config import SESSIONS_DIR
-    import uuid
-    sid   = uuid.uuid4().hex[:8]
-    ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
-    fname = args.strip() or f"session_{ts}_{sid}.json"
-    path  = Path(fname) if "/" in fname else SESSIONS_DIR / fname
-    data  = _build_session_data(state, session_id=sid)
-    path.write_text(json.dumps(data, indent=2, default=str))
-    ok(f"会话已保存 → {path}  (ID: {sid})"  )
+    session_id = uuid.uuid4().hex[:8]
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    fname = args.strip() or f"session_{ts}_{session_id}.json"
+    path = Path(fname) if "/" in fname or "\\" in fname else SESSIONS_DIR / fname
+    saved = session_store.save_named_session(state, path, session_id=session_id)
+    ok(f"会话已保存 → {saved['path']}  (ID: {saved['data']['session_id']})")
     return True
 
 # 退出时自动保存最新会话
 def save_latest(args: str, state, config=None) -> bool:
-    """退出时保存会话：保存最新会话+每日备份+追加到历史记录。"""
-    from config import MR_SESSION_DIR, DAILY_DIR, SESSION_HIST_FILE
-    if not state.messages:
+    """退出时保存最新会话、每日备份和历史汇总。"""
+    result = session_store.save_latest_session(state, config)
+    if result is None:
         return True
 
-    cfg = config or {}
-    daily_limit   = cfg.get("session_daily_limit",   5)
-    history_limit = cfg.get("session_history_limit", 100)
-
-    import uuid
-    now = datetime.now()
-    sid = uuid.uuid4().hex[:8]
-    ts  = now.strftime("%H%M%S")
-    date_str = now.strftime("%Y-%m-%d")
-    data = _build_session_data(state, session_id=sid)
-    payload = json.dumps(data, indent=2, default=str)
-
-    # 1. 保存最新会话文件，用于快速恢复
-    MR_SESSION_DIR.mkdir(parents=True, exist_ok=True)
-    latest_path = MR_SESSION_DIR / "session_latest.json"
-    latest_path.write_text(payload)
-
-    # 2. 每日会话备份
-    day_dir = DAILY_DIR / date_str
-    day_dir.mkdir(parents=True, exist_ok=True)
-    daily_path = day_dir / f"session_{ts}_{sid}.json"
-    daily_path.write_text(payload)
-
-    # 清理每日文件夹：仅保留最新N个文件
-    daily_files = sorted(day_dir.glob("session_*.json"))
-    for old in daily_files[:-daily_limit]:
-        old.unlink(missing_ok=True)
-
-    # 3. 追加到总历史记录
-    if SESSION_HIST_FILE.exists():
-        try:
-            hist = json.loads(SESSION_HIST_FILE.read_text())
-        except Exception:
-            hist = {"total_turns": 0, "sessions": []}
-    else:
-        hist = {"total_turns": 0, "sessions": []}
-
-    hist["sessions"].append(data)
-    hist["total_turns"] = sum(s.get("turn_count", 0) for s in hist["sessions"])
-
-    # 清理历史记录：仅保留最新N个会话
-    if len(hist["sessions"]) > history_limit:
-        hist["sessions"] = hist["sessions"][-history_limit:]
-
-    SESSION_HIST_FILE.write_text(json.dumps(hist, indent=2, default=str))
-
-    ok(f"会话已保存 → {latest_path}")
-    ok(f"             → {daily_path}  (ID: {sid})")
-    ok(f"             → {SESSION_HIST_FILE}  ({len(hist['sessions'])} 个会话 / {hist['total_turns']} 总轮次)")
+    ok(f"会话已保存 → {result['latest_path']}")
+    ok(f"             → {result['daily_path']}  (ID: {result['session_id']})")
+    ok(
+        "             → "
+        f"{result['history_path']}  ({result['history_sessions']} 个会话 / "
+        f"{result['history_turns']} 总轮次)"
+    )
     return True
 
 
 def _trigger_session_end_memory(state, config: dict, start_time: float | None = None) -> None:
-    """Fire background auto-extraction and AutoDream at session end."""
-    try:
-        from memory.auto_extractor import maybe_extract_memories
-        from memory.dream import increment_session_count, maybe_run_dream
-
-        t0 = start_time or config.get("_session_start_time", _time.monotonic())
-        maybe_extract_memories(
-            messages=list(state.messages),
-            config=config,
-            session_start_time=t0,
-            turn_count=getattr(state, "turn_count", 0),
-        )
-        increment_session_count()
-        maybe_run_dream(config)
-    except Exception:
-        pass
+    """把会话结束后的记忆处理委托给后台作业层。"""
+    bg_jobs.trigger_session_end_memory(state, config, start_time)
 
 
 # 加载会话
 def cmd_load(args: str, state, config) -> bool:
-    from config import SESSIONS_DIR, MR_SESSION_DIR, DAILY_DIR
+    from config import SESSION_HIST_FILE
 
-    path = None
+    path: Path | None = None
     if not args.strip():
-        # 按时间倒序收集所有会话
-        sessions: list[Path] = []
-        if DAILY_DIR.exists():
-            for day_dir in sorted(DAILY_DIR.iterdir(), reverse=True):
-                if day_dir.is_dir():
-                    sessions.extend(sorted(day_dir.glob("session_*.json"), reverse=True))
-        # 兼容旧版会话目录
-        if not sessions and MR_SESSION_DIR.exists():
-            sessions = [s for s in sorted(MR_SESSION_DIR.glob("*.json"), reverse=True)
-                        if s.name != "session_latest.json"]
-        # 添加手动保存的会话
-        sessions.extend(sorted(SESSIONS_DIR.glob("session_*.json"), reverse=True))
-
+        sessions = session_store.collect_saved_sessions()
         if not sessions:
             info("未找到保存的会话。")
             return True
 
         print(clr("  选择要加载的会话:", "cyan", "bold"))
-        menu_buf = clr('  选择要加载的会话:', 'cyan', 'bold')
+        menu_buf = clr("  选择要加载的会话:", "cyan", "bold")
         prev_date = None
-        for i, s in enumerate(sessions):
-            # 按日期分组显示
-            date_label = s.parent.name if s.parent.name != "mr_sessions" else ""
+        for i, session_path in enumerate(sessions):
+            date_label = session_path.parent.name if session_path.parent.name != "mr_sessions" else ""
             if date_label and date_label != prev_date:
-                print(clr(f"\n  ── {date_label} ──", "dim"))
-                menu_buf += "\n" + clr(f"\n  ── {date_label} ──", "dim")
+                section = clr(f"\n  ── {date_label} ──", "dim")
+                print(section)
+                menu_buf += "\n" + section
                 prev_date = date_label
 
-            label = s.name
+            label = session_path.name
             try:
-                meta     = json.loads(s.read_text())
+                meta = session_store.load_session_file(session_path)
                 saved_at = meta.get("saved_at", "")[-8:]
-                sid      = meta.get("session_id", "")
-                turns    = meta.get("turn_count", "?")
-                label    = f"{saved_at}  ID:{sid}  轮次:{turns}  {s.name}"
+                sid = meta.get("session_id", "")
+                turns = meta.get("turn_count", "?")
+                label = f"{saved_at}  ID:{sid}  轮次:{turns}  {session_path.name}"
             except Exception:
                 pass
-            print(clr(f"  [{i+1:2d}] ", "yellow") + label)
-            menu_buf += "\n" + clr(f"  [{i+1:2d}] ", "yellow") + label
 
-        # 显示历史记录选项
-        from config import SESSION_HIST_FILE
+            entry = clr(f"  [{i+1:2d}] ", "yellow") + label
+            print(entry)
+            menu_buf += "\n" + entry
+
         has_history = SESSION_HIST_FILE.exists()
         if has_history:
             try:
-                hist_meta = json.loads(SESSION_HIST_FILE.read_text())
-                n_sess  = len(hist_meta.get("sessions", []))
+                hist_meta = json.loads(SESSION_HIST_FILE.read_text(encoding="utf-8"))
+                n_sess = len(hist_meta.get("sessions", []))
                 n_turns = hist_meta.get("total_turns", 0)
-                print(clr(f"\n  ── 完整历史记录 ──", "dim"))
-                menu_buf += "\n" + clr(f"\n  ── 完整历史记录 ──", "dim")
-                hist_prt = clr("  [ H] ", "yellow") + f"加载全部历史  ({n_sess} 个会话 / {n_turns} 总轮次)  {SESSION_HIST_FILE}"
-                print(hist_prt)
-                menu_buf += "\n" + hist_prt
+                history_title = clr("\n  ── 完整历史记录 ──", "dim")
+                history_entry = clr("  [ H] ", "yellow") + (
+                    f"加载全部历史  ({n_sess} 个会话 / {n_turns} 总轮次)  {SESSION_HIST_FILE}"
+                )
+                print(history_title)
+                print(history_entry)
+                menu_buf += "\n" + history_title + "\n" + history_entry
             except Exception:
                 has_history = False
 
         print()
-        ans = ask_input_interactive(clr("  输入序号(例如 1 或 1,2,3)，H 加载全部历史，回车取消 > ", "cyan"), config, menu_buf).strip().lower()
+        ans = ask_input_interactive(
+            clr("  输入序号(例如 1 或 1,2,3)，H 加载全部历史，回车取消 > ", "cyan"),
+            config,
+            menu_buf,
+        ).strip().lower()
 
         if not ans:
             info("  已取消。")
@@ -598,86 +447,95 @@ def cmd_load(args: str, state, config) -> bool:
             if not has_history:
                 err("未找到历史记录文件。")
                 return True
-            hist_data = json.loads(SESSION_HIST_FILE.read_text())
+
+            hist_data = json.loads(SESSION_HIST_FILE.read_text(encoding="utf-8"))
             all_sessions = hist_data.get("sessions", [])
             if not all_sessions:
                 info("历史记录为空。")
                 return True
-            all_messages = []
-            for s in all_sessions:
-                all_messages.extend(s.get("messages", []))
-            total_turns = sum(s.get("turn_count", 0) for s in all_sessions)
-            est_tokens = sum(len(str(m.get("content", ""))) for m in all_messages) // 4
+
+            all_messages: list[dict] = []
+            for saved_session in all_sessions:
+                all_messages.extend(saved_session.get("messages", []))
+
+            total_turns = sum(saved_session.get("turn_count", 0) for saved_session in all_sessions)
+            est_tokens = sum(len(str(msg.get("content", ""))) for msg in all_messages) // 4
             print()
             print(clr(f"  {len(all_messages)} 条消息 / 预估约 {est_tokens:,} 令牌", "dim"))
-            confirm = ask_input_interactive(clr("  将全部历史加载到当前会话？[y/N] > ", "yellow"), config).strip().lower()
+            confirm = ask_input_interactive(
+                clr("  将全部历史加载到当前会话？[y/N] > ", "yellow"),
+                config,
+            ).strip().lower()
             if confirm != "y":
                 info("  已取消。")
                 return True
-            state.messages = all_messages
-            state.turn_count = total_turns
+
+            session_store.restore_state_from_data(
+                state,
+                {
+                    "messages": all_messages,
+                    "turn_count": total_turns,
+                    "total_input_tokens": 0,
+                    "total_output_tokens": 0,
+                },
+            )
             ok(f"已从 {SESSION_HIST_FILE} 加载全部历史 ({len(all_messages)} 条消息，{len(all_sessions)} 个会话)")
             return True
 
-        # 解析逗号分隔的序号
         raw_parts = [p.strip() for p in ans.split(",")]
-        indices = []
-        for p in raw_parts:
-            if not p.isdigit():
-                err(f"无效输入 '{p}'，请输入数字或 H。")
+        indices: list[int] = []
+        for part in raw_parts:
+            if not part.isdigit():
+                err(f"无效输入 '{part}'，请输入数字或 H。")
                 return True
-            idx = int(p) - 1
+            idx = int(part) - 1
             if idx < 0 or idx >= len(sessions):
-                err(f"无效选择: {p} (有效范围: 1–{len(sessions)})")
+                err(f"无效选择: {part} (有效范围: 1–{len(sessions)})")
                 return True
             if idx not in indices:
                 indices.append(idx)
 
         if len(indices) == 1:
-            # 加载单个会话
             path = sessions[indices[0]]
         else:
-            # 合并加载多个会话
-            all_messages = []
-            total_turns  = 0
-            loaded_names = []
+            merged_messages: list[dict] = []
+            total_turns = 0
+            loaded_names: list[str] = []
             for idx in indices:
-                s_path = sessions[idx]
-                s_data = json.loads(s_path.read_text())
-                all_messages.extend(s_data.get("messages", []))
-                total_turns += s_data.get("turn_count", 0)
-                loaded_names.append(s_path.name)
-            est_tokens = sum(len(str(m.get("content", ""))) for m in all_messages) // 4
+                session_path = sessions[idx]
+                session_data = session_store.load_session_file(session_path)
+                merged_messages.extend(session_data.get("messages", []))
+                total_turns += session_data.get("turn_count", 0)
+                loaded_names.append(session_path.name)
+
+            est_tokens = sum(len(str(msg.get("content", ""))) for msg in merged_messages) // 4
             print()
-            print(clr(f"  {len(loaded_names)} 个会话 / {len(all_messages)} 条消息 / 预估约 {est_tokens:,} 令牌", "dim"))
+            print(clr(f"  {len(loaded_names)} 个会话 / {len(merged_messages)} 条消息 / 预估约 {est_tokens:,} 令牌", "dim"))
             confirm = ask_input_interactive(clr("  合并并加载？[y/N] > ", "yellow"), config).strip().lower()
             if confirm != "y":
                 info("  已取消。")
                 return True
-            state.messages = all_messages
-            state.turn_count = total_turns
-            ok(f"已加载 {len(loaded_names)} 个会话 ({len(all_messages)} 条消息): {', '.join(loaded_names)}")
+
+            session_store.restore_state_from_data(
+                state,
+                {
+                    "messages": merged_messages,
+                    "turn_count": total_turns,
+                    "total_input_tokens": 0,
+                    "total_output_tokens": 0,
+                },
+            )
+            ok(f"已加载 {len(loaded_names)} 个会话 ({len(merged_messages)} 条消息): {', '.join(loaded_names)}")
             return True
 
-    if not path:
-        fname = args.strip()
-        path = Path(fname) if "/" in fname or "\\" in fname else SESSIONS_DIR / fname
-        if not path.exists() and ("/" not in fname and "\\" not in fname):
-            for alt in [MR_SESSION_DIR / fname,
-                        *(d / fname for d in DAILY_DIR.iterdir()
-                          if DAILY_DIR.exists() and d.is_dir())]:
-                if alt.exists():
-                    path = alt
-                    break
+    if path is None:
+        path = session_store.resolve_session_path(args.strip())
         if not path.exists():
             err(f"文件不存在: {path}")
             return True
-        
-    data = json.loads(path.read_text())
-    state.messages = data.get("messages", [])
-    state.turn_count = data.get("turn_count", 0)
-    state.total_input_tokens = data.get("total_input_tokens", 0)
-    state.total_output_tokens = data.get("total_output_tokens", 0)
+
+    data = session_store.load_session_file(path)
+    session_store.restore_state_from_data(state, data)
     ok(f"已从 {path} 加载会话 ({len(state.messages)} 条消息)")
     return True
 
@@ -698,11 +556,8 @@ def cmd_resume(args: str, state, config) -> bool:
         err(f"文件不存在: {path}")
         return True
 
-    data = json.loads(path.read_text())
-    state.messages = data.get("messages", [])
-    state.turn_count = data.get("turn_count", 0)
-    state.total_input_tokens = data.get("total_input_tokens", 0)
-    state.total_output_tokens = data.get("total_output_tokens", 0)
+    data = session_store.load_session_file(path)
+    session_store.restore_state_from_data(state, data)
     ok(f"已从 {path} 加载会话 ({len(state.messages)} 条消息)")
     return True
 
@@ -833,23 +688,8 @@ def cmd_cwd(args: str, _state, config) -> bool:
 
 # 构建会话数据结构
 def _build_session_data(state, session_id: str | None = None) -> dict:
-    """将当前对话状态序列化为可 JSON 存储的字典。"""
-    import uuid
-    return {
-        "session_id": session_id or uuid.uuid4().hex[:8],
-        "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "messages": [
-            m if not isinstance(m.get("content"), list) else
-            {**m, "content": [
-                b if isinstance(b, dict) else b.model_dump()
-                for b in m["content"]
-            ]}
-            for m in state.messages
-        ],
-        "turn_count": state.turn_count,
-        "total_input_tokens": state.total_input_tokens,
-        "total_output_tokens": state.total_output_tokens,
-    }
+    """把会话序列化逻辑委托给会话层。"""
+    return session_store.build_session_data(state, session_id=session_id)
 
 
 # 退出程序
@@ -926,36 +766,7 @@ def cmd_agents(_args: str, _state, config) -> bool:
 
 # 打印后台任务通知
 def _print_background_notifications():
-    """打印后台完成的代理任务通知。
-
-    在每次用户输入前调用，无需轮询即可查看结果。
-    """
-    try:
-        from multi_agent.tools import get_agent_manager
-        mgr = get_agent_manager()
-    except Exception:
-        return
-
-    notified_key = "_notified"
-    if not hasattr(_print_background_notifications, "_seen"):
-        _print_background_notifications._seen = set()
-
-    for task in mgr.list_tasks():
-        if task.id in _print_background_notifications._seen:
-            continue
-        if task.status in ("completed", "failed", "cancelled"):
-            _print_background_notifications._seen.add(task.id)
-            icon = "✓" if task.status == "completed" else "✗"
-            color = "green" if task.status == "completed" else "red"
-            branch_info = f" [分支: {task.worktree_branch}]" if task.worktree_branch else ""
-            print(clr(
-                f"\n  {icon} 后台代理 '{task.name}' {task.status}{branch_info}",
-                color, "bold"
-            ))
-            if task.result:
-                preview = task.result[:200] + ("..." if len(task.result) > 200 else "")
-                print(clr(f"    {preview}", "dim"))
-            print()
+    bg_jobs.print_background_notifications(clr)
 
 # 列出可用技能
 def cmd_skills(_args: str, _state, config) -> bool:
@@ -1691,31 +1502,18 @@ COMMANDS = {
 
 # 处理斜杠命令
 def handle_slash(line: str, state, config) -> Union[bool, tuple]:
-    """处理 /命令 [参数]。处理成功返回 True，技能匹配返回元组(技能,参数)。"""
-    if not line.startswith("/"):
+    """把命令解析和技能匹配委托给独立命令层。"""
+    result = _get_command_registry().handle_slash(line, state, config)
+    if result is False:
         return False
-    parts = line[1:].split(None, 1)
-    if not parts:
-        return False
-    cmd = parts[0].lower()
-    args = parts[1] if len(parts) > 1 else ""
-    handler = COMMANDS.get(cmd)
-    if handler:
-        result = handler(args, state, config)
-        # 图片/计划命令返回标记，让交互循环执行查询
-        if isinstance(result, tuple) and result[0] in ("__image__", "__plan__"):
-            return result
+    if result is None:
+        cmd = line[1:].split(None, 1)[0].lower() if line.startswith("/") and line[1:].strip() else ""
+        err(f"未知命令: /{cmd}  (输入 /help 查看命令列表)")
         return True
-
-    # 技能查找
-    from skill import find_skill
-    skill = find_skill(line)
-    if skill:
-        cmd_parts = line.strip().split(maxsplit=1)
-        skill_args = cmd_parts[1] if len(cmd_parts) > 1 else ""
-        return (skill, skill_args)
-
-    err(f"未知命令: /{cmd}  (输入 /help 查看命令列表)")
+    if isinstance(result, tuple) and result and result[0] in ("__image__", "__plan__"):
+        return result
+    if isinstance(result, tuple):
+        return result
     return True
 
 
@@ -1757,69 +1555,24 @@ _CMD_META: dict[str, tuple[str, list[str]]] = {
     "resume":      ("恢复最近会话",                []),
 }
 
+_COMMAND_REGISTRY: CommandRegistry | None = None
+
+
+def _get_command_registry() -> CommandRegistry:
+    """惰性构建全局命令注册表。"""
+    global _COMMAND_REGISTRY
+    if _COMMAND_REGISTRY is None:
+        registry = CommandRegistry()
+        for name, handler in COMMANDS.items():
+            desc, subs = _CMD_META.get(name, ("", []))
+            registry.register(name, handler, description=desc, subcommands=subs)
+        _COMMAND_REGISTRY = registry
+    return _COMMAND_REGISTRY
+
 # 设置命令行补全
 def setup_readline(history_file: Path):
-    if readline is None:
-        return
-    try:
-        readline.read_history_file(str(history_file))
-    except FileNotFoundError:
-        pass
-    except OSError:
-        # libedit (macOS) 无法读取含非 ASCII 字符的历史文件，清空重建
-        try:
-            history_file.write_text("", encoding="utf-8")
-        except Exception:
-            pass
-    readline.set_history_length(1000)
-    atexit.register(readline.write_history_file, str(history_file))
-
-    # 允许 "/" 作为补全标记，使 "/model" 作为一个单词
-    delims = readline.get_completer_delims().replace("/", "")
-    readline.set_completer_delims(delims)
-
-    # 补全器
-    def completer(text: str, state: int):
-        line = readline.get_line_buffer()
-
-        # 补全命令名：包含 / 但无空格
-        if "/" in line and " " not in line:
-            matches = sorted(f"/{c}" for c in _CMD_META if f"/{c}".startswith(text))
-            return matches[state] if state < len(matches) else None
-
-        # 补全子命令："/命令 部分内容"
-        if line.startswith("/") and " " in line:
-            cmd = line.split()[0][1:]
-            if cmd in _CMD_META:
-                subs = _CMD_META[cmd][1]
-                matches = sorted(s for s in subs if s.startswith(text))
-                return matches[state] if state < len(matches) else None
-
-        return None
-
-    # 自定义补全结果展示
-    def display_matches(substitution: str, matches: list, longest: int):
-        sys.stdout.write("\n")
-        line = readline.get_line_buffer()
-        is_cmd = "/" in line and " " not in line
-
-        if is_cmd:
-            col_w = max(len(m) for m in matches) + 2
-            for m in sorted(matches):
-                cmd = m[1:]
-                desc = _CMD_META.get(cmd, ("", []))[0]
-                subs = _CMD_META.get(cmd, ("", []))[1]
-                sub_hint = ("  [" + ", ".join(subs[:4])
-                            + ("…" if len(subs) > 4 else "") + "]") if subs else ""
-                sys.stdout.write(f"  \033[36m{m:<{col_w}}\033[0m  {desc}{sub_hint}\n")
-        else:
-            for m in sorted(matches):
-                sys.stdout.write(f"  {m}\n")
-        sys.stdout.flush()
-
-    readline.set_completion_display_matches_hook(display_matches)
-    readline.set_completer(completer)
-    readline.parse_and_bind("tab: complete")
+    """把 readline 初始化委托给命令层。"""
+    _get_command_registry().setup_readline(history_file)
 
 
 # 主交互循环
@@ -1877,6 +1630,7 @@ def repl(config: dict, initial_prompt: str = None):
     _rich_live_default = not _in_ssh and not _is_dumb
     global _RICH_LIVE
     _RICH_LIVE = _RICH and config.get("rich_live", _rich_live_default)
+    ui.set_rich_live(_RICH_LIVE)
 
     # 执行用户查询
     def run_query(user_input: str, is_background: bool = False):

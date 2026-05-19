@@ -26,6 +26,10 @@ litecc = "litecc:main"
 [tool.setuptools]
 py-modules = [
     "litecc",
+    "litecc_background",
+    "litecc_commands",
+    "litecc_sessions",
+    "litecc_ui",
     "agent",
     "compaction",
     "config",
