@@ -9,7 +9,7 @@ import threading
 from pathlib import Path
 from typing import Callable, Optional
 
-from tool_registry import ToolDef, register_tool
+from tool_registry import ToolDef, format_tool_validation_error, register_tool, validate_tool_call
 from tool_registry import execute_tool as _registry_execute
 
 # ── AskUserQuestion 状态 ──────────────────────────────────────────────────────
@@ -913,6 +913,10 @@ def execute_tool(
     config 字典会传递给工具，用于访问运行时上下文。
     """
     cfg = config or {}
+
+    validation = validate_tool_call(name, inputs)
+    if not validation.valid:
+        return format_tool_validation_error(name, inputs, validation)
 
     def _check(desc: str) -> bool:
         """返回是否允许操作。"""

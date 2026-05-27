@@ -5,10 +5,11 @@
 """
 from __future__ import annotations
 
+import json
+import os
 import time as _time
 import uuid as _uuid
-import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -31,6 +32,14 @@ class ToolDef:
     func: Callable[[Dict[str, Any], Dict[str, Any]], str]
     read_only: bool = False
     concurrent_safe: bool = False
+
+
+@dataclass
+class ToolValidationResult:
+    valid: bool
+    code: str = ""
+    errors: List[str] = field(default_factory=list)
+    details: Dict[str, Any] = field(default_factory=dict)
 
 
 # ── 常量 ───────────────────────────────────────────────────────────────────
@@ -115,6 +124,107 @@ def select_tool_schemas(config: Dict[str, Any], state: Any = None) -> List[Dict[
     return schemas
 
 
+def validate_tool_call(
+    name: str,
+    params: Any,
+    available_tool_names: Optional[set[str]] = None,
+) -> ToolValidationResult:
+    tool = get_tool(name)
+    if tool is None:
+        return ToolValidationResult(
+            valid=False,
+            code="unknown_tool",
+            errors=[f"Unknown tool '{name}'."],
+        )
+
+    if available_tool_names is not None and name not in available_tool_names:
+        return ToolValidationResult(
+            valid=False,
+            code="unavailable_tool",
+            errors=[f"Tool '{name}' is not available in the current context."],
+            details={"available_tools": sorted(available_tool_names)},
+        )
+
+    schema = tool.schema.get("input_schema", {})
+    errors: List[str] = []
+    _validate_against_schema(params, schema, "$", errors, strict_object_keys=True)
+    if errors:
+        return ToolValidationResult(
+            valid=False,
+            code="schema_validation_failed",
+            errors=errors,
+            details={"schema": schema},
+        )
+
+    return ToolValidationResult(valid=True)
+
+
+def format_tool_validation_error(
+    name: str,
+    params: Any,
+    validation: ToolValidationResult,
+    attempt: int = 1,
+) -> str:
+    lines = [
+        "[Tool validation failed]",
+        f"Tool: {name}",
+    ]
+
+    if validation.code == "unknown_tool":
+        lines.append("This tool does not exist, so it was not executed.")
+    elif validation.code == "unavailable_tool":
+        lines.append("This tool is not available in the current context, so it was not executed.")
+    else:
+        lines.append(
+            "The tool was not executed. Call the same tool again with corrected JSON arguments."
+        )
+
+    if validation.errors:
+        lines.append("")
+        lines.append("Issues:")
+        lines.extend(f"- {error}" for error in validation.errors)
+
+    available_tools = validation.details.get("available_tools", [])
+    if available_tools:
+        preview = ", ".join(available_tools[:12])
+        suffix = " ..." if len(available_tools) > 12 else ""
+        lines.append("")
+        lines.append(f"Available tools in this context: {preview}{suffix}")
+
+    schema = validation.details.get("schema")
+    if isinstance(schema, dict):
+        lines.append("")
+        lines.append("Expected input schema:")
+        lines.append(_summarize_schema(schema))
+
+    lines.append("")
+    lines.append("Received arguments:")
+    lines.append(_safe_json(params))
+
+    if attempt > 1:
+        lines.append("")
+        lines.append(
+            f"Repair attempt: {attempt}. Use the exact schema above, or choose a different available tool."
+        )
+
+    return "\n".join(lines)
+
+
+def note_tool_validation_result(name: str, valid: bool, config: Dict[str, Any]) -> int:
+    failures = config.setdefault("_tool_validation_failures", {})
+    if not isinstance(failures, dict):
+        failures = {}
+        config["_tool_validation_failures"] = failures
+
+    if valid:
+        failures.pop(name, None)
+        return 0
+
+    count = int(failures.get(name, 0)) + 1
+    failures[name] = count
+    return count
+
+
 def execute_tool(
     name: str,
     params: Dict[str, Any],
@@ -141,6 +251,10 @@ def execute_tool(
     tool = get_tool(name)
     if tool is None:
         return f"Error: tool '{name}' not found."
+
+    validation = validate_tool_call(name, params)
+    if not validation.valid:
+        return format_tool_validation_error(name, params, validation)
 
     try:
         result = tool.func(params, config)
@@ -217,6 +331,167 @@ def _update_file_access_log(
         return
     log: Dict[str, float] = config.setdefault("_file_access_log", {})
     log[str(file_path)] = _time.time()
+
+
+def _validate_against_schema(
+    value: Any,
+    schema: Dict[str, Any],
+    path: str,
+    errors: List[str],
+    strict_object_keys: bool = False,
+) -> None:
+    if not isinstance(schema, dict):
+        return
+
+    expected_type = schema.get("type")
+    if expected_type and not _matches_schema_type(value, expected_type):
+        errors.append(
+            f"{path}: expected {_format_expected_type(expected_type)}, got {_describe_value_type(value)}"
+        )
+        return
+
+    enum_values = schema.get("enum")
+    if isinstance(enum_values, list) and value not in enum_values:
+        rendered = ", ".join(repr(item) for item in enum_values)
+        errors.append(f"{path}: expected one of [{rendered}], got {value!r}")
+        return
+
+    schema_type = _primary_schema_type(expected_type)
+    if schema_type == "object":
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+        additional = schema.get("additionalProperties", None)
+
+        if isinstance(required, list):
+            for field_name in required:
+                if field_name not in value:
+                    errors.append(f"{path}.{field_name}: missing required property")
+
+        if not isinstance(properties, dict):
+            properties = {}
+
+        for key, child_value in value.items():
+            child_path = f"{path}.{key}"
+            if key in properties:
+                _validate_against_schema(
+                    child_value,
+                    properties[key],
+                    child_path,
+                    errors,
+                    strict_object_keys=False,
+                )
+                continue
+
+            if additional is False or (strict_object_keys and properties):
+                errors.append(f"{child_path}: unexpected property")
+                continue
+
+            if isinstance(additional, dict):
+                _validate_against_schema(
+                    child_value,
+                    additional,
+                    child_path,
+                    errors,
+                    strict_object_keys=False,
+                )
+        return
+
+    if schema_type == "array":
+        item_schema = schema.get("items")
+        if isinstance(item_schema, dict):
+            for idx, item in enumerate(value):
+                _validate_against_schema(
+                    item,
+                    item_schema,
+                    f"{path}[{idx}]",
+                    errors,
+                    strict_object_keys=False,
+                )
+
+
+def _matches_schema_type(value: Any, expected_type: Any) -> bool:
+    if isinstance(expected_type, list):
+        return any(_matches_schema_type(value, item) for item in expected_type)
+    if expected_type == "object":
+        return isinstance(value, dict)
+    if expected_type == "array":
+        return isinstance(value, list)
+    if expected_type == "string":
+        return isinstance(value, str)
+    if expected_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected_type == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if expected_type == "boolean":
+        return isinstance(value, bool)
+    if expected_type == "null":
+        return value is None
+    return True
+
+
+def _primary_schema_type(expected_type: Any) -> str:
+    if isinstance(expected_type, list):
+        return str(expected_type[0]) if expected_type else ""
+    return str(expected_type or "")
+
+
+def _format_expected_type(expected_type: Any) -> str:
+    if isinstance(expected_type, list):
+        return " or ".join(str(item) for item in expected_type)
+    return str(expected_type)
+
+
+def _describe_value_type(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, dict):
+        return "object"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    return type(value).__name__
+
+
+def _summarize_schema(schema: Dict[str, Any]) -> str:
+    lines: List[str] = []
+    if schema.get("type"):
+        lines.append(f"- type: {schema['type']}")
+
+    required = schema.get("required", [])
+    if isinstance(required, list) and required:
+        lines.append("- required: " + ", ".join(str(item) for item in required))
+
+    properties = schema.get("properties", {})
+    if isinstance(properties, dict) and properties:
+        lines.append("- properties:")
+        for key, prop in properties.items():
+            if not isinstance(prop, dict):
+                lines.append(f"  - {key}")
+                continue
+            desc = prop.get("type", "any")
+            if isinstance(prop.get("enum"), list):
+                enum_preview = ", ".join(repr(item) for item in prop["enum"])
+                desc = f"{desc}; enum=[{enum_preview}]"
+            lines.append(f"  - {key}: {desc}")
+
+    return "\n".join(lines) if lines else "- any JSON value"
+
+
+def _safe_json(value: Any, max_chars: int = 2000) -> str:
+    try:
+        rendered = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
+    except TypeError:
+        rendered = repr(value)
+    if len(rendered) <= max_chars:
+        return rendered
+    return rendered[:max_chars] + f"\n... [{len(rendered) - max_chars} more chars]"
 
 
 def _allowed_tool_names(config: Dict[str, Any]) -> Optional[set[str]]:

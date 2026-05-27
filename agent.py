@@ -8,7 +8,12 @@ from typing import Generator
 
 import time as _time
 
-from tool_registry import select_tool_schemas
+from tool_registry import (
+    format_tool_validation_error,
+    note_tool_validation_result,
+    select_tool_schemas,
+    validate_tool_call,
+)
 from tools import execute_tool
 import tools as _tools_init  # 确保导入时注册内置工具
 from providers import stream, Response, TextChunk, ThinkingChunk, detect_provider
@@ -116,13 +121,15 @@ def run(
 
         # 读时投影
         messages_for_api = apply_context_collapse(state.messages, config)
+        selected_tool_schemas = select_tool_schemas(config, state)
+        selected_tool_names = {schema.get("name", "") for schema in selected_tool_schemas}
 
         # 从模型厂商流式输出（根据模型名称自动检测）
         for event in stream(
             model=config["model"],
             system=system_prompt,
             messages=messages_for_api,
-            tool_schemas=select_tool_schemas(config, state),
+            tool_schemas=selected_tool_schemas,
             config=config,
         ):
             if isinstance(event, (TextChunk, ThinkingChunk)):  # 实时片段：立刻抛出去展示
@@ -163,11 +170,35 @@ def run(
 
         # ── 执行工具 ────────────────────────────────────────────────
         for toolcall in response.tool_calls:
-            yield ToolStart(toolcall["name"], toolcall["input"])
+            tool_input = toolcall.get("input", {})
+            yield ToolStart(toolcall["name"], tool_input)
+            validation = validate_tool_call(
+                toolcall["name"],
+                tool_input,
+                available_tool_names=selected_tool_names,
+            )
+            if not validation.valid:
+                attempt = note_tool_validation_result(toolcall["name"], False, config)
+                result = format_tool_validation_error(
+                    toolcall["name"],
+                    tool_input,
+                    validation,
+                    attempt=attempt,
+                )
+                yield ToolEnd(toolcall["name"], result, False)
+                state.messages.append({
+                    "role":         "tool",
+                    "tool_call_id": toolcall["id"],
+                    "name":         toolcall["name"],
+                    "content":      result,
+                })
+                continue
+
+            note_tool_validation_result(toolcall["name"], True, config)
 
             # 工具执行前钩子：可阻止或自动批准
             hook_dec = fire_pre_tool(
-                toolcall["name"], toolcall.get("input", {}),
+                toolcall["name"], tool_input,
                 config.get("_session_id", ""), config.get("_cwd", "."),
             )
             if hook_dec.decision == "block":
@@ -207,14 +238,14 @@ def run(
                     result = "Denied: user rejected this operation"
             else:
                 result = execute_tool(
-                    toolcall["name"], toolcall["input"],
+                    toolcall["name"], tool_input,
                     permission_mode="accept-all",  # 已完成权限校验
                     config=config,
                     tool_use_id=toolcall.get("id"),
                 )
                 # 工具执行后钩子
                 fire_post_tool(
-                    toolcall["name"], toolcall.get("input", {}), {"result": result},
+                    toolcall["name"], tool_input, {"result": result},
                     config.get("_session_id", ""), config.get("_cwd", "."),
                 )
 

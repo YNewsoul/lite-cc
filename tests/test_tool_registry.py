@@ -7,11 +7,14 @@ from tool_registry import (
     ToolDef,
     clear_registry,
     execute_tool,
+    format_tool_validation_error,
     get_all_tools,
     get_tool,
     get_tool_schemas,
+    note_tool_validation_result,
     register_tool,
     select_tool_schemas,
+    validate_tool_call,
 )
 
 
@@ -89,6 +92,43 @@ def test_get_tool_schemas():
     schemas = get_tool_schemas()
     assert len(schemas) == 1
     assert schemas[0]["name"] == "echo"
+
+
+def test_validate_tool_call_missing_required_property():
+    register_tool(_make_echo_tool("echo"))
+    validation = validate_tool_call("echo", {}, available_tool_names={"echo"})
+    assert validation.valid is False
+    assert validation.code == "schema_validation_failed"
+    assert any("missing required property" in error for error in validation.errors)
+
+
+def test_validate_tool_call_rejects_unexpected_top_level_property():
+    register_tool(_make_echo_tool("echo"))
+    validation = validate_tool_call(
+        "echo",
+        {"text": "hello", "extra": 1},
+        available_tool_names={"echo"},
+    )
+    assert validation.valid is False
+    assert any("unexpected property" in error for error in validation.errors)
+
+
+def test_validate_tool_call_rejects_unavailable_tool():
+    register_tool(_make_echo_tool("echo"))
+    validation = validate_tool_call("echo", {"text": "hello"}, available_tool_names={"other"})
+    assert validation.valid is False
+    assert validation.code == "unavailable_tool"
+    rendered = format_tool_validation_error("echo", {"text": "hello"}, validation)
+    assert "not available in the current context" in rendered
+    assert "other" in rendered
+
+
+def test_note_tool_validation_result_counts_and_resets():
+    config = {}
+    assert note_tool_validation_result("echo", False, config) == 1
+    assert note_tool_validation_result("echo", False, config) == 2
+    assert note_tool_validation_result("echo", True, config) == 0
+    assert config["_tool_validation_failures"] == {}
 
 
 def test_select_tool_schemas_plan_mode_keeps_plan_flow_tools(monkeypatch):
@@ -192,6 +232,37 @@ def test_execute_tool():
     register_tool(_make_echo_tool())
     result = execute_tool("echo", {"text": "hello"}, config={})
     assert result == "hello"
+
+
+def test_execute_tool_invalid_input_returns_validation_error():
+    called = {"count": 0}
+
+    def func(params: dict, config: dict) -> str:
+        called["count"] += 1
+        return params["text"]
+
+    register_tool(ToolDef(
+        name="echo",
+        schema={
+            "name": "echo",
+            "description": "Echo tool",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                },
+                "required": ["text"],
+            },
+        },
+        func=func,
+        read_only=True,
+        concurrent_safe=True,
+    ))
+
+    result = execute_tool("echo", {}, config={})
+    assert "Tool validation failed" in result
+    assert "missing required property" in result
+    assert called["count"] == 0
 
 
 def test_execute_unknown_tool():
