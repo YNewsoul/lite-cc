@@ -5,3 +5,5 @@ __pycache__/
 *.egg-info/
 source/
 .litecc/secrets.json
+.litecc/models.json
+.vscode/

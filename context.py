@@ -252,6 +252,21 @@ def build_system_prompt(config: dict | None = None) -> str:
     if retrieved:
         dynamic += f"\n\n# 已检索记忆（根据当前上下文筛选）\n{retrieved}\n"
 
+    allowed_tools = cfg.get("_allowed_tools")
+    if isinstance(allowed_tools, list) and allowed_tools:
+        dynamic += (
+            "\n\n# 当前工具范围\n"
+            "当前会话只允许使用以下工具："
+            + "、".join(str(name) for name in allowed_tools)
+            + "\n"
+        )
+
+    if cfg.get("network_enabled") is False:
+        dynamic += (
+            "\n\n# 网络工具限制\n"
+            "当前未开放网络工具，WebFetch 和 WebSearch 不可用。\n"
+        )
+
     # ── 计划限制层附加内容（独立于 permission_mode）────────────────────────
     if is_plan_mode(cfg):
         plan_file = get_plan_file(cfg)

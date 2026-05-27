@@ -8,7 +8,7 @@ from typing import Generator
 
 import time as _time
 
-from tool_registry import get_tool_schemas
+from tool_registry import select_tool_schemas
 from tools import execute_tool
 import tools as _tools_init  # 确保导入时注册内置工具
 from providers import stream, Response, TextChunk, ThinkingChunk, detect_provider
@@ -122,7 +122,7 @@ def run(
             model=config["model"],
             system=system_prompt,
             messages=messages_for_api,
-            tool_schemas=get_tool_schemas(),
+            tool_schemas=select_tool_schemas(config, state),
             config=config,
         ):
             if isinstance(event, (TextChunk, ThinkingChunk)):  # 实时片段：立刻抛出去展示

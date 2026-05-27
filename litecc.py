@@ -274,7 +274,8 @@ def cmd_help(_args: str, _state, config) -> bool:
 
 # 管理模型
 def cmd_model(args: str, _state, config) -> bool:
-    from providers import PROVIDERS, detect_provider
+    from providers import PROVIDERS, detect_provider, ensure_provider_catalog_loaded
+    ensure_provider_catalog_loaded()
     if not args:
         model = config["model"]
         pname = detect_provider(model)
@@ -2000,7 +2001,8 @@ def main():
         sys.exit(0)
 
     from config import load_config, save_config, has_api_key
-    from providers import detect_provider, PROVIDERS
+    from providers import detect_provider, PROVIDERS, ensure_provider_catalog_loaded
+    ensure_provider_catalog_loaded()
 
     config = load_config()
 
@@ -2008,7 +2010,8 @@ def main():
     if args.model:
         m = args.model
         if "/" not in m and ":" in m:
-            from providers import PROVIDERS
+            from providers import PROVIDERS, ensure_provider_catalog_loaded
+            ensure_provider_catalog_loaded()
             left, _ = m.split(":", 1)
             if left in PROVIDERS:
                 m = m.replace(":", "/", 1)

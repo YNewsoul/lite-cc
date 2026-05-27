@@ -11,6 +11,7 @@ from tool_registry import (
     get_tool,
     get_tool_schemas,
     register_tool,
+    select_tool_schemas,
 )
 
 
@@ -88,6 +89,99 @@ def test_get_tool_schemas():
     schemas = get_tool_schemas()
     assert len(schemas) == 1
     assert schemas[0]["name"] == "echo"
+
+
+def test_select_tool_schemas_plan_mode_keeps_plan_flow_tools(monkeypatch):
+    import tool_registry
+
+    monkeypatch.setattr(tool_registry, "_workspace_has_notebook", lambda config: True)
+    monkeypatch.setattr(tool_registry, "_ready_mcp_tool_names", lambda: set())
+
+    register_tool(_make_echo_tool("read_only", read_only=True))
+    register_tool(_make_echo_tool("Write", read_only=False))
+    register_tool(_make_echo_tool("Edit", read_only=False))
+    register_tool(_make_echo_tool("write_like", read_only=False))
+    register_tool(ToolDef(
+        name="ExitPlanMode",
+        schema={"name": "ExitPlanMode", "description": "exit", "input_schema": {"type": "object", "properties": {}}},
+        func=lambda params, config: "ok",
+        read_only=False,
+        concurrent_safe=False,
+    ))
+
+    schemas = select_tool_schemas({"_plan_mode_active": True})
+    names = [schema["name"] for schema in schemas]
+    assert names == ["read_only", "Write", "Edit", "ExitPlanMode"]
+
+
+def test_select_tool_schemas_respects_allowed_tools(monkeypatch):
+    import tool_registry
+
+    monkeypatch.setattr(tool_registry, "_workspace_has_notebook", lambda config: True)
+    monkeypatch.setattr(tool_registry, "_ready_mcp_tool_names", lambda: set())
+
+    register_tool(_make_echo_tool("a"))
+    register_tool(_make_echo_tool("b"))
+
+    schemas = select_tool_schemas({"_allowed_tools": ["b"]})
+    assert [schema["name"] for schema in schemas] == ["b"]
+
+
+def test_select_tool_schemas_hides_web_tools_when_network_disabled(monkeypatch):
+    import tool_registry
+
+    monkeypatch.setattr(tool_registry, "_workspace_has_notebook", lambda config: True)
+    monkeypatch.setattr(tool_registry, "_ready_mcp_tool_names", lambda: set())
+
+    register_tool(_make_echo_tool("Read", read_only=True))
+    register_tool(_make_echo_tool("WebFetch", read_only=True))
+    register_tool(_make_echo_tool("WebSearch", read_only=True))
+
+    schemas = select_tool_schemas({"network_enabled": False})
+    assert [schema["name"] for schema in schemas] == ["Read"]
+
+
+def test_select_tool_schemas_hides_notebook_edit_without_notebook(monkeypatch):
+    import tool_registry
+
+    monkeypatch.setattr(tool_registry, "_workspace_has_notebook", lambda config: False)
+    monkeypatch.setattr(tool_registry, "_ready_mcp_tool_names", lambda: set())
+
+    register_tool(_make_echo_tool("Read", read_only=True))
+    register_tool(_make_echo_tool("NotebookEdit", read_only=False))
+
+    schemas = select_tool_schemas({})
+    assert [schema["name"] for schema in schemas] == ["Read"]
+
+
+def test_select_tool_schemas_keeps_notebook_edit_after_notebook_seen(tmp_path, monkeypatch):
+    import tool_registry
+
+    notebook_path = tmp_path / "demo.ipynb"
+    notebook_path.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(tool_registry, "_ready_mcp_tool_names", lambda: set())
+    monkeypatch.setattr(tool_registry, "_scan_for_notebook", lambda root: False)
+
+    register_tool(_make_echo_tool("Read", read_only=True))
+    register_tool(_make_echo_tool("NotebookEdit", read_only=False))
+
+    schemas = select_tool_schemas({"_file_access_log": {str(notebook_path): 1.0}})
+    assert [schema["name"] for schema in schemas] == ["Read", "NotebookEdit"]
+
+
+def test_select_tool_schemas_hides_unready_mcp_tools(monkeypatch):
+    import tool_registry
+
+    monkeypatch.setattr(tool_registry, "_workspace_has_notebook", lambda config: True)
+    monkeypatch.setattr(tool_registry, "_ready_mcp_tool_names", lambda: {"mcp__ready__tool"})
+
+    register_tool(_make_echo_tool("Read", read_only=True))
+    register_tool(_make_echo_tool("mcp__ready__tool", read_only=True))
+    register_tool(_make_echo_tool("mcp__waiting__tool", read_only=True))
+
+    schemas = select_tool_schemas({})
+    assert [schema["name"] for schema in schemas] == ["Read", "mcp__ready__tool"]
 
 
 # ------------------------------------------------------------------

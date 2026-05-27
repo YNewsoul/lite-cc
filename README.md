@@ -1,6 +1,6 @@
 # litecc
 
-**litecc** 是一个轻量、可自由扩展的 Python AI 编程助手，灵感来自 Claude Code。它运行一个带工具调用的流式智能体循环，开箱支持 10+ 个模型厂商，并提供简洁的 REPL，可通过自定义技能（Skill）和 MCP 服务器随意扩展。
+**litecc** 是一个轻量、可自由扩展的 Python AI 编程助手，灵感来自 Claude Code。它运行一个带工具调用的流式智能体循环，开箱支持 10+ 个模型厂商，并提供简洁的 REPL，可通过自定义技能（Skill）和 服务器随意扩展。
 
 ```bash
 pip install anthropic          # 或 openai，或任意支持的厂商 SDK

@@ -13,18 +13,8 @@ PROJECT_SECRETS_NAME = "secrets.json"
 # 为兼容旧版本而保留（/resume 仍会从这里读取）
 MR_SESSION_DIR = SESSIONS_DIR / "mr_sessions"
 
-SECRET_CONFIG_KEYS = {
-    "api_key",
-    "anthropic_api_key",
-    "openai_api_key",
-    "gemini_api_key",
-    "kimi_api_key",
-    "qwen_api_key",
-    "zhipu_api_key",
-    "deepseek_api_key",
-    "minimax_api_key",
-    "custom_api_key",
-}
+def _is_secret_config_key(key: str) -> bool:
+    return key == "api_key" or key.endswith("_api_key")
 
 DEFAULTS = {
     "model":            "zhipu/glm-4",
@@ -34,6 +24,7 @@ DEFAULTS = {
     "verbose":          False,
     "thinking":         False,
     "thinking_budget":  10000,
+    "network_enabled":  True,
     "custom_base_url":  "",       # for "custom" provider
     "max_tool_output":  32000,
     "max_agent_depth":  3,
@@ -81,7 +72,7 @@ def _load_project_secrets() -> tuple[dict, Path | None]:
     if not isinstance(raw, dict):
         return {}, secrets_path
 
-    secrets = {k: v for k, v in raw.items() if k in SECRET_CONFIG_KEYS and isinstance(v, str)}
+    secrets = {k: v for k, v in raw.items() if _is_secret_config_key(k) and isinstance(v, str)}
     if secrets.get("api_key") and not secrets.get("anthropic_api_key"):
         secrets["anthropic_api_key"] = secrets["api_key"]
     return secrets, secrets_path

@@ -7,9 +7,12 @@ from __future__ import annotations
 
 import time as _time
 import uuid as _uuid
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+
+from plan_mode import is_plan_mode
 
 
 @dataclass
@@ -67,6 +70,49 @@ def get_all_tools() -> List[ToolDef]:
 def get_tool_schemas() -> List[Dict[str, Any]]:
     """返回所有已注册工具的 schema，供模型 API 的 tools 参数使用。"""
     return [t.schema for t in _registry.values()]
+
+
+def select_tool_schemas(config: Dict[str, Any], state: Any = None) -> List[Dict[str, Any]]:
+    """Return tool schemas filtered for the current runtime context.
+
+    Selection rules:
+      - Plan mode exposes read-only tools plus Write/Edit/ExitPlanMode for plan flow.
+      - Sub-agents can restrict tools via config["_allowed_tools"].
+      - WebFetch/WebSearch are hidden when networking is disabled.
+      - NotebookEdit is hidden when the workspace has no notebooks.
+      - MCP tools are hidden until their backing server is connected/ready.
+    """
+    del state  # reserved for future context-aware filtering
+
+    allowed_tools = _allowed_tool_names(config)
+    network_enabled = _network_enabled(config)
+    has_notebook = _workspace_has_notebook(config)
+    ready_mcp_tools = _ready_mcp_tool_names()
+
+    schemas: List[Dict[str, Any]] = []
+    for tool in get_all_tools():
+        name = tool.name
+
+        if is_plan_mode(config) and not (
+            tool.read_only or name in {"Write", "Edit", "ExitPlanMode"}
+        ):
+            continue
+
+        if allowed_tools is not None and name not in allowed_tools:
+            continue
+
+        if not network_enabled and name in {"WebFetch", "WebSearch"}:
+            continue
+
+        if not has_notebook and name == "NotebookEdit":
+            continue
+
+        if name.startswith("mcp__") and name not in ready_mcp_tools:
+            continue
+
+        schemas.append(tool.schema)
+
+    return schemas
 
 
 def execute_tool(
@@ -171,3 +217,84 @@ def _update_file_access_log(
         return
     log: Dict[str, float] = config.setdefault("_file_access_log", {})
     log[str(file_path)] = _time.time()
+
+
+def _allowed_tool_names(config: Dict[str, Any]) -> Optional[set[str]]:
+    raw = config.get("_allowed_tools")
+    if not raw:
+        return None
+    if isinstance(raw, str):
+        return {raw}
+    if isinstance(raw, (list, tuple, set)):
+        return {str(item) for item in raw if str(item).strip()}
+    return None
+
+
+def _network_enabled(config: Dict[str, Any]) -> bool:
+    if "network_enabled" in config:
+        return bool(config.get("network_enabled"))
+    if "allow_network" in config:
+        return bool(config.get("allow_network"))
+    if "disable_network" in config:
+        return not bool(config.get("disable_network"))
+    return True
+
+
+def _workspace_has_notebook(config: Dict[str, Any]) -> bool:
+    file_access_log = config.get("_file_access_log", {})
+    if isinstance(file_access_log, dict):
+        for raw_path in file_access_log:
+            try:
+                path = Path(str(raw_path))
+            except Exception:
+                continue
+            if path.suffix == ".ipynb" and path.exists():
+                return True
+
+    cwd = str(Path.cwd())
+    cache = config.get("_tool_schema_notebook_cache")
+    now = _time.time()
+    if isinstance(cache, dict):
+        if cache.get("cwd") == cwd and now - float(cache.get("checked_at", 0)) < 10:
+            return bool(cache.get("has_notebook"))
+
+    has_notebook = _scan_for_notebook(Path.cwd())
+    config["_tool_schema_notebook_cache"] = {
+        "cwd": cwd,
+        "checked_at": now,
+        "has_notebook": has_notebook,
+    }
+    return has_notebook
+
+
+def _scan_for_notebook(root: Path) -> bool:
+    skip_dirs = {
+        ".git",
+        ".hg",
+        ".svn",
+        ".venv",
+        "venv",
+        "__pycache__",
+        "node_modules",
+        ".mypy_cache",
+        ".pytest_cache",
+    }
+    for current_root, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in skip_dirs]
+        for filename in filenames:
+            if filename.endswith(".ipynb"):
+                return True
+    return False
+
+
+def _ready_mcp_tool_names() -> set[str]:
+    try:
+        from mcp.client import get_mcp_manager
+    except Exception:
+        return set()
+
+    try:
+        manager = get_mcp_manager()
+        return {tool.qualified_name for tool in manager.all_tools()}
+    except Exception:
+        return set()

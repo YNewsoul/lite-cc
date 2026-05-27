@@ -334,6 +334,16 @@ class SubAgentManager:
                 eff_config["model"] = agent_def.model
             if agent_def.system_prompt:
                 eff_system = agent_def.system_prompt.rstrip() + "\n\n" + system_prompt
+            if agent_def.tools:
+                eff_config["_allowed_tools"] = list(agent_def.tools)
+                eff_config["_subagent_type"] = agent_def.name
+                eff_system = (
+                    eff_system.rstrip()
+                    + "\n\n[Tool Availability]\n"
+                    + "You may ONLY use these tools in this sub-agent: "
+                    + ", ".join(agent_def.tools)
+                    + "\n"
+                )
 
         # 处理 worktree 隔离逻辑
         worktree_path = ""

@@ -1,0 +1,33 @@
+{
+  "providers": {
+    "ollama": {
+      "type": "openai",
+      "base_url": "http://127.0.0.1:11434/v1",
+      "context_limit": 32768,
+      "models": [
+        "qwen2.5-coder:7b",
+        "deepseek-r1:8b"
+      ],
+      "prefixes": [
+        "qwen2.5-coder",
+        "deepseek-r1"
+      ]
+    },
+    "lmstudio": {
+      "type": "openai",
+      "base_url": "http://127.0.0.1:1234/v1",
+      "context_limit": 32768,
+      "models": [
+        "local-model"
+      ]
+    }
+  },
+  "costs": {
+    "qwen2.5-coder:7b": [0, 0],
+    "deepseek-r1:8b": [0, 0],
+    "local-model": [0, 0]
+  },
+  "prefixes": {
+    "my-local-": "lmstudio"
+  }
+}
