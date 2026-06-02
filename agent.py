@@ -32,7 +32,7 @@ __all__ = [
 @dataclass
 class AgentState:
     """可变会话状态。消息使用与厂商无关的中立格式。"""
-    messages: list = field(default_factory=list)
+    messages: list = field(default_factory=list) # 会话消息列表，每个实例独立
     total_input_tokens:  int = 0
     total_output_tokens: int = 0
     turn_count: int = 0

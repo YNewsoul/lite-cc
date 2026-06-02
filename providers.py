@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Generator
 
 
+# 内置模型注册表
 _BUILTIN_PROVIDERS: dict[str, dict] = {
     "anthropic": {
         "type": "anthropic",
@@ -112,6 +113,7 @@ _BUILTIN_PROVIDERS: dict[str, dict] = {
     },
 }
 
+# 内置模型成本表
 _BUILTIN_COSTS: dict[str, tuple[float, float]] = {
     "claude-opus-4-6": (15.0, 75.0),
     "claude-sonnet-4-6": (3.0, 15.0),
@@ -135,6 +137,7 @@ _BUILTIN_COSTS: dict[str, tuple[float, float]] = {
     "abab6.5-chat": (0.5, 0.5),
 }
 
+# 内置模型前缀表
 _BUILTIN_PREFIXES: list[tuple[str, str]] = [
     ("claude-", "anthropic"),
     ("gpt-", "openai"),
@@ -151,17 +154,18 @@ _BUILTIN_PREFIXES: list[tuple[str, str]] = [
     ("abab", "minimax"),
 ]
 
+# 用户模型目录
 USER_MODEL_CATALOG = Path.home() / ".litecc" / "models.json"
 PROJECT_MODEL_CATALOG_DIR = ".litecc"
 PROJECT_MODEL_CATALOG_NAME = "models.json"
 
-# Public registries are mutated in-place so imported references remain valid.
+# 模型注册表
 PROVIDERS: dict[str, dict] = {}
 COSTS: dict[str, tuple[float, float]] = {}
 _PREFIXES: list[tuple[str, str]] = []
 _CATALOG_SIGNATURE: tuple | None = None
 
-
+# 加载 JSON 文件
 def _load_json_file(path: Path) -> dict:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
@@ -169,7 +173,7 @@ def _load_json_file(path: Path) -> dict:
     except Exception:
         return {}
 
-
+# 查找项目模型目录
 def _find_project_model_catalog(start_dir: Path | None = None) -> Path | None:
     current = (start_dir or Path.cwd()).resolve()
     while True:
@@ -181,7 +185,7 @@ def _find_project_model_catalog(start_dir: Path | None = None) -> Path | None:
             return None
         current = parent
 
-
+# 查找所有模型目录
 def _catalog_files(start_dir: Path | None = None) -> list[Path]:
     files: list[Path] = []
     if USER_MODEL_CATALOG.exists():
@@ -191,7 +195,7 @@ def _catalog_files(start_dir: Path | None = None) -> list[Path]:
         files.append(project_file)
     return files
 
-
+# 计算路径签名
 def _path_signature(path: Path) -> tuple[str, int, int] | tuple[str, None, None]:
     if not path.exists():
         return (str(path), None, None)
@@ -201,7 +205,7 @@ def _path_signature(path: Path) -> tuple[str, int, int] | tuple[str, None, None]
     except Exception:
         return (str(path), None, None)
 
-
+# 计算模型目录签名
 def _catalog_signature(start_dir: Path | None = None) -> tuple:
     return tuple(_path_signature(path) for path in _catalog_files(start_dir))
 
@@ -290,7 +294,7 @@ def _apply_model_catalog(data: dict, providers: dict[str, dict],
             if prefix and provider_name:
                 _register_prefix(prefix, provider_name, prefixes)
 
-
+# 重新加载模型目录
 def reload_provider_catalog(start_dir: Path | None = None) -> None:
     global _CATALOG_SIGNATURE
 
@@ -316,14 +320,14 @@ def reload_provider_catalog(start_dir: Path | None = None) -> None:
 
     _CATALOG_SIGNATURE = _catalog_signature(start_dir)
 
-
+# 确保模型目录已加载
 def ensure_provider_catalog_loaded(start_dir: Path | None = None) -> None:
     global _CATALOG_SIGNATURE
     signature = _catalog_signature(start_dir)
     if _CATALOG_SIGNATURE != signature or not PROVIDERS:
         reload_provider_catalog(start_dir)
 
-
+# 检测模型提供程序
 def detect_provider(model: str) -> str:
     """Detect provider from `provider/model` or from known model prefixes."""
     ensure_provider_catalog_loaded()
@@ -335,7 +339,7 @@ def detect_provider(model: str) -> str:
             return provider_name
     return "openai"
 
-
+# 移除可选的提供程序前缀
 def bare_model(model: str) -> str:
     """Strip the optional `provider/` prefix from a model string."""
     return model.split("/", 1)[1] if "/" in model else model
