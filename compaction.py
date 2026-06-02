@@ -115,6 +115,7 @@ def micro_compact(messages: list, config: dict) -> int:
     """在 prompt cache 很可能已失效时，清除较旧且可重新获取的工具结果。
 
     会保留最近 5 条可清理工具结果的原始内容，更早的则替换为占位文本。
+    不做摘要，也不删除整轮对话，而是专门去处理那些较老、可重新获取、继续留在上下文里价值不高的工具结果。
     只有当 agent 空闲时间超过 _MICRO_COMPACT_IDLE_MINUTES 时才会触发。
 
     返回：
@@ -133,6 +134,7 @@ def micro_compact(messages: list, config: dict) -> int:
         if m.get("role") != "tool":
             continue
         tool_name = m.get("name", "")
+        # # _CLEARABLE_TOOLS 中的工具结果可以安全清空，_PRESERVE_TOOLS 中的工具结果必须保留
         if tool_name in _CLEARABLE_TOOLS and tool_name not in _PRESERVE_TOOLS:
             clearable.append(i)
 
@@ -254,7 +256,7 @@ Summarise the following conversation. Produce a structured summary with ALL nine
 
 
 def compact_messages(messages: list, config: dict, focus: str = "") -> list:
-    """把旧消息压缩成结构化的 LLM 摘要（第 5 层）。
+    """把旧消息压缩成结构化的 LLM 摘要（第 4 层）。
 
     特性：
     - 使用结构化的 9 维提示词，不做 content[:500] 这种简单截断
@@ -272,9 +274,11 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
     # 熔断器
     failures = config.get("_compact_failures", 0)
     if failures >= 3:
-        # 放弃 LLM 压缩，直接原样返回
+        # 如果最近连续 3 次压缩失败，直接放弃继续尝试
         return messages
 
+    # 决定“旧历史”和“最近历史”的分界点
+    # 尽量保留最近约 30% token 的原始消息，较早 70% 进入摘要
     split = find_split_point(messages)
     if split <= 0:
         return messages
@@ -291,6 +295,7 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
     prompt = _COMPACT_PROMPT_TEMPLATE.format(old_text=old_text) + extra
 
     try:
+        # 调用一次模型来生成摘要
         summary_text = ""
         for event in providers.stream(
             model=config["model"],
@@ -491,7 +496,7 @@ def maybe_compact(state, config: dict) -> bool:
     except Exception:
         pass
 
-    # 第 5 层：完整 LLM 摘要
+    # 第 4 层：完整 LLM 摘要
     state.messages = compact_messages(state.messages, config)
     state.messages.extend(_restore_plan_context(config))
     return True

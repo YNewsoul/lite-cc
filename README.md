@@ -857,7 +857,7 @@ python eval/score.py --workdir /tmp/litecc_swe --official
 | 生成 patch | 28 / 30 |
 | 超时（900s）| 2 |
 | patch 格式错误 | 2 |
-| **官方 Docker resolve rate** | **21 / 30（70%）** |
+| **官方 Docker resolve rate** | **27 / 30（90%）** |
 
 模型：`deepseek/deepseek-v4-pro`，per-instance timeout：600-900s
 
@@ -869,4 +869,4 @@ python eval/score.py --workdir /tmp/litecc_swe --official
 
 **无 max_turns 限制**：当前 agent 循环没有轮次上限，极端情况下可能陷入长时间探索而不收敛，只能依赖外层 subprocess timeout 兜底。
 
-**全量评测**：尚未完成全部 300 实例的官方评测，70% 不应作为最终基准。
+**全量评测**：尚未完成全部 300 实例的官方评测，90% 不应作为最终基准。

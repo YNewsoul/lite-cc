@@ -42,20 +42,44 @@ litecc — Claude Code 的极简 Python 实现。
   /tasks clear               删除所有任务
   /exit /quit 退出程序
 """
+
 from __future__ import annotations
 
 import sys
-# 检查 Python 版本，低于 3.10 则退出
-if sys.version_info < (3, 10):
-    sys.exit(
-        f"litecc 需要 Python 版本 ≥ 3.10。"
-        f"当前检测版本: {sys.version}\n"
-        f"提示: 尝试使用 python3.10 或更新版本运行 "
-        f"(例如 /opt/miniconda3/bin/python3.13 litecc.py)"
-    )
+import os
+import argparse
+import threading
+import time
+import uuid as _uuid
+from pathlib import Path
 
-from tools import ask_input_interactive
+import litecc_ui as ui
+from litecc_ui import (
+    RICH_AVAILABLE,
+    console,
+    clr,
+    info,
+    ok,
+    warn,
+    err,
+    stream_text,
+    stream_thinking,
+    flush_response,
+    start_tool_spinner as _start_tool_spinner,
+    change_spinner_phrase as _change_spinner_phrase,
+    stop_tool_spinner as _stop_tool_spinner,
+    print_tool_start,
+    print_tool_end,
+    print_welcome_banner,
+)
+
+from config import load_config, has_api_key, HISTORY_FILE
+from providers import detect_provider, PROVIDERS, ensure_provider_catalog_loaded
+from litecc_helpers import ask_permission_interactive
 from plan_mode import is_plan_mode, get_plan_file
+from context import build_system_prompt
+from memory.retriever import retrieve_for_query
+from agent import AgentState, run, TextChunk, ThinkingChunk, ToolStart, ToolEnd, TurnDone, PermissionRequest
 from litecc_command_handlers import (
     configure_command_layer,
     cmd_copy,
@@ -68,254 +92,50 @@ from litecc_command_handlers import (
     setup_readline,
     trigger_session_end_memory as _trigger_session_end_memory,
 )
-import litecc_ui as ui
 
-import os
-import re
 # Windows 系统下启用 ANSI 转义码支持
 if sys.platform == "win32":
     os.system("")
-import json
-import argparse
-from pathlib import Path
-import threading
-import time
 
 # 版本号
 VERSION = "3.05.5"
-_RICH = ui.RICH_AVAILABLE
-console = ui.console
+_RICH = RICH_AVAILABLE
 configure_command_layer(VERSION, __doc__ or "")
-
-# ANSI 颜色代码定义（即使使用 rich 也会用于非 Markdown 输出）
-C = {
-    "cyan":    "\033[36m",
-    "green":   "\033[32m",
-    "yellow":  "\033[33m",
-    "red":     "\033[31m",
-    "blue":    "\033[34m",
-    "magenta": "\033[35m",
-    "bold":    "\033[1m",
-    "dim":     "\033[2m",
-    "reset":   "\033[0m",
-}
-
-# 为文本添加颜色样式
-def clr(text: str, *keys: str) -> str:
-    return ui.clr(text, *keys)
-
-# 日志打印工具函数
-def info(msg: str):
-    ui.info(msg)
-
-
-def ok(msg: str):
-    ui.ok(msg)
-
-
-def warn(msg: str):
-    ui.warn(msg)
-
-
-def err(msg: str):
-    ui.err(msg)
-
-
-# 渲染差异文本，红色表示删除，绿色表示新增
-def render_diff(text: str):
-    """委托到 UI 模块渲染 diff。"""
-    ui.render_diff(text)
-
-# 检查文本是否包含标准格式的差异内容
-def _has_diff(text: str) -> bool:
-    """委托到 UI 模块判断是否是 diff。"""
-    return ui.has_diff(text)
-
 
 # 对话渲染开关
 _RICH_LIVE = True
 
-# 流式输出文本片段
-def stream_text(chunk: str) -> None:
-    """委托到 UI 模块处理流式文本渲染。"""
-    ui.stream_text(chunk)
-
-# 流式输出思考过程（仅详细模式下显示）
-def stream_thinking(chunk: str, verbose: bool):
-    ui.stream_thinking(chunk, verbose)
-
-# 刷新响应内容，结束实时渲染
-def flush_response() -> None:
-    """委托到 UI 模块刷新输出。"""
-    ui.flush_response()
-
-# 工具执行加载动画文案
-_TOOL_SPINNER_PHRASES = [
-    "⚡ 光速重构中...",
-    "🏁 与光速赛跑...",
-    "🤔 巴里·艾伦是谁？...",
-    "🐆 超越编译器...",
-    "💨 甩开电子...",
-    "🌍 环绕代码库...",
-    "⏱️ 突破音障...",
-    "🔥 比热重载更快...",
-    "🚀 达到终端速度...",
-    "🐾 在栈上留下爪痕...",
-    "🏎️ 切换6档...",
-    "⚡ 速度之力已激活...",
-    "🌪️ 闪电般遍历抽象语法树...",
-    "💫 扭曲时空...",
-    "🐆 Litecc 模式启动...",
-]
-
-# 辩论加载动画文案
-_DEBATE_SPINNER_PHRASES = [
-    "⚔️  专家各就各位...",
-    "🧠  专家构建论点中...",
-    "🗣️  辩论进行中...",
-    "⚖️  权衡证据...",
-    "💡  构建反驳论点...",
-    "🔥  辩论白热化...",
-    "📜  起草共识...",
-    "🎯  寻找共同点...",
-]
-
-# 工具加载动画线程相关变量
-_tool_spinner_thread = None
-_tool_spinner_stop = threading.Event()
-
-_spinner_phrase = ""
-_spinner_lock = threading.Lock()
-
-# 后台运行工具加载
-def _run_tool_spinner():
-    chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-    i = 0
-    while not _tool_spinner_stop.is_set():
-        with _spinner_lock:
-            phrase = _spinner_phrase
-        frame = chars[i % len(chars)]
-        sys.stdout.write(f"\r  {frame} {clr(phrase, 'dim')}   ")
-        sys.stdout.flush()
-        i += 1
-        _tool_spinner_stop.wait(0.1)
-
-# 启动工具加载动画
-def _start_tool_spinner():
-    ui.start_tool_spinner()
-
-# 切换加载动画文案（不停止动画）
-def _change_spinner_phrase():
-    """委托到 UI 模块切换加载文案。"""
-    ui.change_spinner_phrase()
-
-# 停止工具加载动画
-def _stop_tool_spinner():
-    ui.stop_tool_spinner()
-
-# 打印工具调用开始信息
-def print_tool_start(name: str, inputs: dict, verbose: bool):
-    """委托到 UI 模块渲染工具开始事件。"""
-    ui.print_tool_start(name, inputs, verbose)
-
-# 打印工具调用结束信息
-def print_tool_end(name: str, result: str, verbose: bool):
-    ui.print_tool_end(name, result, verbose)
-
-# 生成工具调用描述
-def _tool_desc(name: str, inputs: dict) -> str:
-    if name == "Read":   return f"读取({inputs.get('file_path','')})"
-    if name == "Write":  return f"写入({inputs.get('file_path','')})"
-    if name == "Edit":   return f"编辑({inputs.get('file_path','')})"
-    if name == "Bash":   return f"执行命令({inputs.get('command','')[:80]})"
-    if name == "Glob":   return f"文件匹配({inputs.get('pattern','')})"
-    if name == "Grep":   return f"文本搜索({inputs.get('pattern','')})"
-    if name == "WebFetch":    return f"网页获取({inputs.get('url','')[:60]})"
-    if name == "WebSearch":   return f"网页搜索({inputs.get('query','')})"
-    if name == "Agent":
-        atype = inputs.get("subagent_type", "")
-        aname = inputs.get("name", "")
-        iso   = inputs.get("isolation", "")
-        bg    = not inputs.get("wait", True)
-        parts = []
-        if atype:  parts.append(atype)
-        if aname:  parts.append(f"名称={aname}")
-        if iso:    parts.append(f"隔离={iso}")
-        if bg:     parts.append("后台")
-        suffix = f"({', '.join(parts)})" if parts else ""
-        prompt_short = inputs.get("prompt", "")[:60]
-        return f"代理{suffix}: {prompt_short}"
-    if name == "SendMessage":
-        return f"发送消息(接收方={inputs.get('to','')}: {inputs.get('message','')[:50]})"
-    if name == "CheckAgentResult": return f"检查代理结果({inputs.get('task_id','')})"
-    if name == "ListAgentTasks":   return "列出代理任务()"
-    if name == "ListAgentTypes":   return "列出代理类型()"
-    return f"{name}({list(inputs.values())[:1]})"
-
-
-# 交互式权限确认
-def ask_permission_interactive(desc: str, config: dict) -> bool:
-    text = ask_input_interactive(f"  允许: {desc}  [y/N/a(全部允许)] ", config).strip().lower()
-
-    if text == "a" or text == "accept all" or text == "accept-all":
-        config["permission_mode"] = "accept-all"
-        ok("  本次会话权限模式已设为全部允许。")
-        return True
-    
-    return text in ("y", "yes")
-
-
 # 主交互循环
 def repl(config: dict, initial_prompt: str = None):
-    from config import HISTORY_FILE
-    from context import build_system_prompt
-    from agent import AgentState, run, TextChunk, ThinkingChunk, ToolStart, ToolEnd, TurnDone, PermissionRequest
 
-    setup_readline(HISTORY_FILE) # 初始化读取历史记录
-    state = AgentState()
+    setup_readline(HISTORY_FILE) # 读取历史命令
+    state = AgentState() # 初始化agent状态对象
     verbose = config.get("verbose", False)
 
     # 注入会话标识
-    import uuid as _uuid
     config.setdefault("_session_id", str(_uuid.uuid4()))
     config.setdefault("_cwd", str(Path.cwd()))
     _session_start_time = time.monotonic()
     config["_session_start_time"] = _session_start_time
     # 欢迎横幅
     if not initial_prompt:
-        from providers import detect_provider
-        
         model    = config["model"]
         pname    = detect_provider(model)
-        model_clr = clr(model, "cyan", "bold")
-        prov_clr  = clr(f"({pname})", "dim")
-        pmode     = clr(config.get("permission_mode", "auto"), "yellow")
-        ver_clr   = clr(f"v{VERSION}", "green")
-
-        plan_active = is_plan_mode(config)
-        plan_suffix = clr(" [计划模式]", "magenta", "bold") if plan_active else ""
-        print(clr("  ╭─ ", "dim") + clr("litecc ", "cyan", "bold") + ver_clr + clr(" ─────────────────────────────────╮", "dim"))
-        print(clr("  │", "dim") + clr("  模型: ", "dim") + model_clr + " " + prov_clr)
-        print(clr("  │", "dim") + clr("  权限: ", "dim") + pmode + plan_suffix)
-        print(clr("  │", "dim") + clr("  /model 切换模型 · /help 查看命令", "dim"))
-        print(clr("  ╰──────────────────────────────────────────────────────╯", "dim"))
-
-        # 显示非默认的激活配置
-        active_flags = []
-        if config.get("verbose"):
-            active_flags.append("详细模式")
-        if config.get("thinking"):
-            active_flags.append("扩展思考")
-        if active_flags:
-            flags_str = " · ".join(clr(f, "green") for f in active_flags)
-            info(f"已激活: {flags_str}")
-        print()
+        print_welcome_banner(
+            version=VERSION,
+            model=model,
+            provider_name=pname,
+            permission_mode=config.get("permission_mode", "auto"),
+            plan_active=is_plan_mode(config),
+            verbose_enabled=bool(config.get("verbose")),
+            thinking_enabled=bool(config.get("thinking")),
+        )
 
     query_lock = threading.RLock()
 
     # 应用实时渲染配置：自动检测 SSH 和哑终端
-    import os as _os
-    _in_ssh = bool(_os.environ.get("SSH_CLIENT") or _os.environ.get("SSH_TTY"))
+
+    _in_ssh = bool(os.environ.get("SSH_CLIENT") or os.environ.get("SSH_TTY"))
     _is_dumb = (console is not None and getattr(console, "is_dumb_terminal", False))
     _rich_live_default = not _in_ssh and not _is_dumb
     global _RICH_LIVE
@@ -329,13 +149,13 @@ def repl(config: dict, initial_prompt: str = None):
         with query_lock:
             verbose = config.get("verbose", False)
 
-            # 后台记忆检索（与 API 调用并行执行）
+            # 1.后台记忆检索（与 API 调用并行执行）
             # 检索结果不是给当前查询，而是给后续查询
             _mem_result: dict = {"content": ""}
 
             def _memory_retrieval_worker() -> None:
                 try:
-                    from memory.retriever import retrieve_for_query
+                    # 从记忆中检索
                     _mem_result["content"] = retrieve_for_query(user_input, config)
                 except Exception:
                     pass
@@ -345,7 +165,7 @@ def repl(config: dict, initial_prompt: str = None):
             )
             _mem_thread.start()
 
-            # 重建系统提示词
+            # 2.重建系统提示词
             system_prompt = build_system_prompt(config)
 
             print(clr("\n╭─ litecc ", "dim") + clr("●", "green") + clr(" ─────────────────────────", "dim"))
@@ -359,6 +179,7 @@ def repl(config: dict, initial_prompt: str = None):
             _duplicate_suppressed = False # 是否已经进入“去重模式”
 
             try:
+                # 3.运行主循环
                 for event in run(user_input, state, config, system_prompt):
                     # 有输出时停止加载动画
                     if spinner_shown:
@@ -399,6 +220,7 @@ def repl(config: dict, initial_prompt: str = None):
                         stream_text(event.text)
 
                     elif isinstance(event, ThinkingChunk):
+                        # 处理思考流
                         if verbose:
                             if not thinking_started:
                                 flush_response()
@@ -407,10 +229,12 @@ def repl(config: dict, initial_prompt: str = None):
                             stream_thinking(event.text, verbose)
 
                     elif isinstance(event, ToolStart):
+                        # 处理工具调用
                         flush_response()
                         print_tool_start(event.name, event.inputs, verbose)
 
                     elif isinstance(event, PermissionRequest):
+                        # 处理权限请求
                         _stop_tool_spinner()
                         flush_response()
                         from hooks.dispatcher import fire_notification as _fire_notification
@@ -428,6 +252,7 @@ def repl(config: dict, initial_prompt: str = None):
                             config["permission_mode"] = _perm_cfg.get("permission_mode", config.get("permission_mode"))
 
                     elif isinstance(event, ToolEnd):
+                        # 处理工具执行结果
                         print_tool_end(event.name, event.result, verbose)
                         _post_tool = True
                         _post_tool_buf.clear()
@@ -440,6 +265,7 @@ def repl(config: dict, initial_prompt: str = None):
                         spinner_shown = True
 
                     elif isinstance(event, TurnDone):
+                        # 处理回合结束
                         _stop_tool_spinner()
                         spinner_shown = False
                         if verbose:
@@ -661,25 +487,15 @@ def repl(config: dict, initial_prompt: str = None):
 
 # 程序入口
 def main():
-    parser = argparse.ArgumentParser(
-        prog="litecc",
-        description="litecc — Claude Code 的极简 Python 实现",
-        add_help=False,
-    )
+    parser = argparse.ArgumentParser(prog="litecc",add_help=False,)
     parser.add_argument("prompt", nargs="*", help="初始提示词(非交互模式)")
-    parser.add_argument("-p", "--print", "--print-output",
-                        dest="print_mode", action="store_true",
-                        help="非交互模式: 执行提示词后退出")
+    parser.add_argument("-p", "--print", "--print-output",dest="print_mode", action="store_true",help="非交互模式: 执行提示词后退出")
     parser.add_argument("-m", "--model", help="覆盖模型配置")
-    parser.add_argument("--accept-all", action="store_true",
-                        help="无需授权确认(接受所有操作)")
-    parser.add_argument("--verbose", action="store_true",
-                        help="显示思考过程+令牌计数")
-    parser.add_argument("--thinking", action="store_true",
-                        help="启用扩展思考模式")
-    parser.add_argument("--version", action="store_true", help="打印版本信息")
-    parser.add_argument("-h", "--help", action="store_true", help="显示帮助")
-
+    parser.add_argument("--accept-all", action="store_true",help="无需授权确认(接受所有操作)")
+    parser.add_argument("--verbose", action="store_true",help="显示思考过程+令牌计数")
+    parser.add_argument("--thinking", action="store_true",help="启用扩展思考模式")
+    parser.add_argument("--version", action="store_true",help="打印版本信息")
+    parser.add_argument("-h", "--help", action="store_true",help="显示帮助")
     args = parser.parse_args()
 
     if args.version:
@@ -690,17 +506,16 @@ def main():
         print(__doc__)
         sys.exit(0)
 
-    from config import load_config, save_config, has_api_key
-    from providers import detect_provider, PROVIDERS, ensure_provider_catalog_loaded
+    # 确保提供商目录加载
     ensure_provider_catalog_loaded()
 
+    # 加载配置
     config = load_config()
 
     # 应用命令行参数覆盖配置
     if args.model:
         m = args.model
         if "/" not in m and ":" in m:
-            from providers import PROVIDERS, ensure_provider_catalog_loaded
             ensure_provider_catalog_loaded()
             left, _ = m.split(":", 1)
             if left in PROVIDERS:
@@ -731,7 +546,5 @@ def main():
     # 交互模式
     repl(config, initial_prompt=initial)
 
-
 if __name__ == "__main__":
     main()
-

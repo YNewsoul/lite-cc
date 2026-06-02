@@ -85,7 +85,7 @@ def get_memory_context(include_guidance: bool = False) -> str:
     parts: list[str] = []
 
     # 用户级记忆索引
-    user_content = get_index_content("user")
+    user_content = get_index_content("user") 
     if user_content:
         truncated = truncate_index_content(user_content)
         parts.append(truncated)
@@ -100,6 +100,7 @@ def get_memory_context(include_guidance: bool = False) -> str:
         return ""
 
     body = "\n\n".join(parts)
+    # 判断是否包含完整记忆使用指南
     if include_guidance:
         return f"{MEMORY_SYSTEM_PROMPT}\n\n## MEMORY.md\n{body}"
     return body

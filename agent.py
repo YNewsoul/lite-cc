@@ -64,12 +64,12 @@ class PermissionRequest:
 # ── 智能体循环 ─────────────────────────────────────────────────────────────
 
 def run(
-    user_message: str,
-    state: AgentState,
-    config: dict,
-    system_prompt: str,
-    depth: int = 0,
-    cancel_check=None,
+    user_message: str,# 用户输入的消息
+    state: AgentState, # 会话状态
+    config: dict, # 智能体配置
+    system_prompt: str, # 系统提示词
+    depth: int = 0, # 子智能体嵌套深度，顶层为 0
+    cancel_check=None, # 可调用对象，返回 True 则提前终止循环
 ) -> Generator:
     """
     多轮智能体循环（生成器）。
@@ -86,9 +86,10 @@ def run(
     pending_img = config.pop("_pending_image", None)
     if pending_img:
         user_msg["images"] = [pending_img]
+    # 1.先添加用户消息到会话状态
     state.messages.append(user_msg)
 
-    # 将运行时元数据注入配置，让工具（如 Agent）可以访问
+    # 2.将运行时元数据注入 config ，让工具（如 Agent）可以访问
     config = {**config, "_depth": depth, "_system_prompt": system_prompt}
 
     while True:
@@ -97,10 +98,10 @@ def run(
         state.turn_count += 1
         response: Response | None = None
 
-        # 当接近上下文窗口限制时进行压缩
+        # 3. 上下文治理：当接近上下文窗口限制时进行压缩
         maybe_compact(state, config)
 
-        # 计划模式：每 5 轮注入一条简短的只读提醒
+        # 4.计划模式：每 5 轮注入一条简短的“只读提醒”
         _reminder_injected = False
         if (is_plan_mode(config)
                 and state.turn_count % 5 == 0
@@ -119,12 +120,14 @@ def run(
         # 记录 API 调用时间（用于微型压缩空闲计时器）
         config["_last_api_call_time"] = _time.time()
 
-        # 读时投影
+        # 5. 读时投影
         messages_for_api = apply_context_collapse(state.messages, config)
+
+        # 6. 选择要暴露的工具
         selected_tool_schemas = select_tool_schemas(config, state)
         selected_tool_names = {schema.get("name", "") for schema in selected_tool_schemas}
 
-        # 从模型厂商流式输出（根据模型名称自动检测）
+        # 7. 请求 provider，流式接收事件
         for event in stream(
             model=config["model"],
             system=system_prompt,
@@ -140,13 +143,13 @@ def run(
         if response is None:
             break
 
-        # 记录历史前移除临时的计划模式提醒
+        # 8. 记录历史消息前移除临时的计划模式提醒
         if _reminder_injected:
             if state.messages and state.messages[-1].get("role") == "user":
                 state.messages.pop()
             _reminder_injected = False
 
-        # 以中立格式记录助手消息
+        # 9. 把 assistant 完整回复写回历史
         asst_msg: dict = {
             "role":       "assistant",
             "content":    response.text,
@@ -156,9 +159,9 @@ def run(
             asst_msg["reasoning_content"] = response.reasoning_content
         state.messages.append(asst_msg)
 
+        # 10. 记录并更新模型回复的 token 数
         state.total_input_tokens  += response.in_tokens
         state.total_output_tokens += response.out_tokens
-        # 当前这次模型回复完成
         yield TurnDone(response.in_tokens, response.out_tokens)
 
         # 停止钩子（每轮完成后触发）
@@ -168,16 +171,19 @@ def run(
         if not response.tool_calls:
             break  # 无工具调用：单轮对话完成
 
-        # ── 执行工具 ────────────────────────────────────────────────
+        # 11.如果有工具调用，进入工具执行子循环
         for toolcall in response.tool_calls:
             tool_input = toolcall.get("input", {})
             yield ToolStart(toolcall["name"], tool_input)
+            # 做 schema 和可用性校验
             validation = validate_tool_call(
                 toolcall["name"],
                 tool_input,
                 available_tool_names=selected_tool_names,
             )
             if not validation.valid:
+                # 校验失败：记录错误并跳过
+                # 生成结构化错误文本
                 attempt = note_tool_validation_result(toolcall["name"], False, config)
                 result = format_tool_validation_error(
                     toolcall["name"],
@@ -186,6 +192,7 @@ def run(
                     attempt=attempt,
                 )
                 yield ToolEnd(toolcall["name"], result, False)
+                # 追加一条 role=tool 错误消息到历史记录
                 state.messages.append({
                     "role":         "tool",
                     "tool_call_id": toolcall["id"],
@@ -204,6 +211,7 @@ def run(
             if hook_dec.decision == "block":
                 result = f"[Blocked by hook: {hook_dec.reason}]" if hook_dec.reason else "[Blocked by hook]"
                 yield ToolEnd(toolcall["name"], result, False)
+                # 追加一条 role=tool 错误消息到历史记录
                 state.messages.append({
                     "role":         "tool",
                     "tool_call_id": toolcall["id"],
@@ -216,12 +224,14 @@ def run(
             if hook_dec.decision == "approve":
                 permitted = True
             else:
+                # 需要检查权限
                 permitted = _check_permission(toolcall, config)
                 if not permitted:
                     if is_plan_mode(config):
                         # 计划模式：静默拒绝写入操作（无需用户确认）
                         permitted = False
                     else:
+                        # 非计划模式：请求用户确认
                         req = PermissionRequest(description=_permission_desc(toolcall), _config=config)
                         yield req
                         permitted = req.granted
@@ -237,6 +247,7 @@ def run(
                 else:
                     result = "Denied: user rejected this operation"
             else:
+                # 权限校验通过：执行工具
                 result = execute_tool(
                     toolcall["name"], tool_input,
                     permission_mode="accept-all",  # 已完成权限校验
@@ -248,10 +259,10 @@ def run(
                     toolcall["name"], tool_input, {"result": result},
                     config.get("_session_id", ""), config.get("_cwd", "."),
                 )
-
+            # 工具执行结果
             yield ToolEnd(toolcall["name"], result, permitted)
 
-            # 以中立格式添加工具执行结果
+            # 以中立格式添加工具执行结果到历史记录
             state.messages.append({
                 "role":         "tool",
                 "tool_call_id": toolcall["id"],

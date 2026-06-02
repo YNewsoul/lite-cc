@@ -322,7 +322,7 @@ def reload_provider_catalog(start_dir: Path | None = None) -> None:
 
 # 确保模型目录已加载
 def ensure_provider_catalog_loaded(start_dir: Path | None = None) -> None:
-    global _CATALOG_SIGNATURE
+    global _CATALOG_SIGNATURE # 
     signature = _catalog_signature(start_dir)
     if _CATALOG_SIGNATURE != signature or not PROVIDERS:
         reload_provider_catalog(start_dir)

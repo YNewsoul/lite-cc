@@ -67,6 +67,44 @@ def err(msg: str) -> None:
     print(clr(f"错误: {msg}", "red"), file=sys.stderr)
 
 
+def print_welcome_banner(
+    version: str,
+    model: str,
+    provider_name: str,
+    permission_mode: str,
+    plan_active: bool,
+    verbose_enabled: bool,
+    thinking_enabled: bool,
+) -> None:
+    """Print the interactive welcome banner and active runtime flags."""
+    model_clr = clr(model, "cyan", "bold")
+    prov_clr = clr(f"({provider_name})", "dim")
+    pmode = clr(permission_mode, "yellow")
+    ver_clr = clr(f"v{version}", "green")
+    plan_suffix = clr(" [计划模式]", "magenta", "bold") if plan_active else ""
+
+    print(
+        clr("  ╭─ ", "dim")
+        + clr("litecc ", "cyan", "bold")
+        + ver_clr
+        + clr(" ─────────────────────────────────╮", "dim")
+    )
+    print(clr("  │", "dim") + clr("  模型: ", "dim") + model_clr + " " + prov_clr)
+    print(clr("  │", "dim") + clr("  权限: ", "dim") + pmode + plan_suffix)
+    print(clr("  │", "dim") + clr("  /model 切换模型 · /help 查看命令", "dim"))
+    print(clr("  ╰──────────────────────────────────────────────────────╯", "dim"))
+
+    active_flags: list[str] = []
+    if verbose_enabled:
+        active_flags.append("详细模式")
+    if thinking_enabled:
+        active_flags.append("扩展思考")
+    if active_flags:
+        flags_str = " · ".join(clr(flag, "green") for flag in active_flags)
+        info(f"已激活: {flags_str}")
+    print()
+
+
 def render_diff(text: str) -> None:
     """把 unified diff 按颜色打印到终端。"""
     for line in text.splitlines():

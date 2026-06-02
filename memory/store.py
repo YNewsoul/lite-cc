@@ -39,8 +39,8 @@ def get_memory_dir(scope: str = "user") -> Path:
                "project" (.litecc/memory relative to cwd)
     """
     if scope == "project":
-        return get_project_memory_dir()
-    return USER_MEMORY_DIR
+        return get_project_memory_dir() # 项目级记忆目录：.litecc/memory/
+    return USER_MEMORY_DIR # 用户级记忆目录：~/.litecc/memory/
 
 
 # ── Data model ─────────────────────────────────────────────────────────────
@@ -193,8 +193,9 @@ def _rewrite_index(scope: str) -> None:
 
 def get_index_content(scope: str = "user") -> str:
     """Return raw MEMORY.md content for the given scope, or '' if absent."""
-    mem_dir = get_memory_dir(scope)
-    index_path = mem_dir / INDEX_FILENAME
+    mem_dir = get_memory_dir(scope) # 获取记忆目录
+    index_path = mem_dir / INDEX_FILENAME # 记忆索引文件路径：.litecc/memory/MEMORY.md
     if not index_path.exists():
+        # 记忆索引文件不存在，返回空字符串
         return ""
     return index_path.read_text().strip()

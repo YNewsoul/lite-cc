@@ -229,25 +229,27 @@ def build_system_prompt(config: dict | None = None) -> str:
     """
     cfg = config or {}
 
-    # ── 动态部分 ────────────────────────────────────────────────────
+    # ── 1.动态部分 ────────────────────────────────────────────────────
     shell = os.environ.get("SHELL", os.environ.get("COMSPEC", "unknown"))
+
+    # 1.1 环境信息
     dynamic = _DYNAMIC_TEMPLATE.format(
-        date=datetime.now().strftime("%Y-%m-%d %A"),
-        cwd=str(Path.cwd()),
-        platform=_platform.system(),
-        shell=shell,
-        git_info=get_git_info(),
-        claude_md=get_claude_md(),
+        date=datetime.now().strftime("%Y-%m-%d %A"), # 日期
+        cwd=str(Path.cwd()), # 工作目录
+        platform=_platform.system(), # 系统平台
+        shell=shell, # Shell
+        git_info=get_git_info(), # Git 仓库信息
+        claude_md=get_claude_md(), # CLAUDE.md 内容
     )
     dynamic += get_platform_hints()
 
-    # ── 记忆索引（动态） ─────────────────────────────────────────────
+    # 1.2 记忆索引（动态
     # MEMORY.md 索引：让模型知晓可用记忆
     memory_ctx = get_memory_context()
     if memory_ctx:
         dynamic += f"\n\n# 记忆索引\n{memory_ctx}\n"
 
-    # 已检索的记忆内容：当前上下文选中的完整记忆文本
+    # 1.2 已检索的记忆内容：当前上下文选中的完整记忆文本
     retrieved = cfg.get("_retrieved_memories", "")
     if retrieved:
         dynamic += f"\n\n# 已检索记忆（根据当前上下文筛选）\n{retrieved}\n"

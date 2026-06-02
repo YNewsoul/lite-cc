@@ -68,6 +68,7 @@ def scan_memory_headers(
                     lines.append(line)
             meta, _ = parse_frontmatter("".join(lines))
             mtime = fp.stat().st_mtime
+            # 提取记忆元数据
             entries.append({
                 "name":        meta.get("name", fp.stem),
                 "description": meta.get("description", ""),
@@ -77,13 +78,13 @@ def scan_memory_headers(
             })
         except Exception:
             continue
-
+    # 按修改时间排序（最新优先）
     entries.sort(key=lambda e: e["mtime_s"], reverse=True)
     return entries[:max_entries]
 
 
 def scan_all_memory_headers() -> list[dict]:
-    """Scan both user and project memory dirs and return merged header list."""
+    """扫描用户级和项目级记忆目录，返回合并后的记忆列表。"""
     user_headers = scan_memory_headers(USER_MEMORY_DIR)
     proj_headers = scan_memory_headers(get_memory_dir("project"))
     # 按 file_path 去重（项目级条目优先）
@@ -100,18 +101,14 @@ def scan_all_memory_headers() -> list[dict]:
 def select_relevant_memories(
     query: str,
     headers: list[dict],
-    tool_in_use: Optional[str] = None,
     config: Optional[dict] = None,
-    max_results: int = 5,
+    max_results: int = 5, # 最多选择 5 条
 ) -> list[str]:
-    """Use a fast LLM call to pick the most relevant memory file paths.
-
-    Falls back to returning the newest `max_results` entries on any error.
+    """让一个轻量模型来帮忙挑相关的记忆。
 
     Args:
         query:       the user's current input (or tool name/description)
         headers:     list of header dicts from scan_memory_headers()
-        tool_in_use: name of tool currently in use (reserved for future filtering)
         config:      agent config dict (must contain "model")
         max_results: maximum number of memories to select
 
@@ -223,10 +220,11 @@ def retrieve_for_query(query: str, config: Optional[dict] = None) -> str:
     This is the function called from the background retrieval thread.
     """
     try:
+        # 扫描所有记忆目录
         headers = scan_all_memory_headers()
         if not headers:
             return ""
-        paths = select_relevant_memories(query, headers, config=config)
+        paths = select_relevant_memories(query, headers, config=config) # 使用轻量模型选择相关的记忆
         return load_selected_memories(paths)
     except Exception:
         return ""
